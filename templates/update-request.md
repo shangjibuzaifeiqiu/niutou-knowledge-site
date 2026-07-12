@@ -2,7 +2,7 @@
 
 ## 新增 PDF
 
-更新网站，按 `docs/reusable-update-workflow.md` 执行。只处理新增或变化页面，不要重做已处理页面。
+更新网站，按 `docs/reusable-update-workflow.md` 执行。只处理新增或变化页面，不要重做已处理页面。必须按知识点拆分，不要一个 PDF 只做成一篇总览。
 
 新增文件：
 

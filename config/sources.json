@@ -3,21 +3,44 @@
     "subject": "分析力学",
     "course": "分析力学基础",
     "slug": "mechanics",
-    "note": "src/pages/notes/virtual-displacement.md",
+    "notes": [
+      "src/pages/notes/mechanics-constraints-virtual-displacement.md",
+      "src/pages/notes/mechanics-generalized-coordinates-virtual-work.md",
+      "src/pages/notes/mechanics-dalembert-lagrange.md",
+      "src/pages/notes/mechanics-energy-integral.md"
+    ],
     "processed_pages": [1, 2, 3, 4, 5, 6]
   },
   "数学分析（2）.pdf": {
     "subject": "数学分析",
     "course": "数学分析",
     "slug": "math-analysis",
-    "note": "src/pages/notes/linear-ordinary-differential-equations.md",
+    "notes": [
+      "src/pages/notes/math-constant-coefficient-ode.md",
+      "src/pages/notes/math-multivariable-limits-differentiability.md",
+      "src/pages/notes/math-composite-implicit-gradient.md",
+      "src/pages/notes/math-multiple-integrals.md",
+      "src/pages/notes/math-line-surface-integrals.md",
+      "src/pages/notes/math-infinite-series.md",
+      "src/pages/notes/math-function-series-power-series.md"
+    ],
     "processed_pages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
   },
   "物理·电磁学(3).pdf": {
     "subject": "电磁学",
     "course": "电磁学",
     "slug": "electromagnetism",
-    "note": "src/pages/notes/electrostatics-foundations.md",
+    "notes": [
+      "src/pages/notes/em-coulomb-electric-field.md",
+      "src/pages/notes/em-gauss-law.md",
+      "src/pages/notes/em-electric-potential.md",
+      "src/pages/notes/em-dielectric-displacement-energy.md",
+      "src/pages/notes/em-biot-savart-ampere.md",
+      "src/pages/notes/em-magnetic-media.md",
+      "src/pages/notes/em-electromagnetic-induction.md",
+      "src/pages/notes/em-displacement-current-maxwell.md",
+      "src/pages/notes/em-electromagnetic-waves.md"
+    ],
     "processed_pages": [1, 2, 3]
   }
 }
