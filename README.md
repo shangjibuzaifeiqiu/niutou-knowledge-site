@@ -7,9 +7,9 @@
 1. 把新增或替换的 PDF 放入 `input/`。
 2. 告诉 Codex“更新网站”。
 3. Codex 运行 `scripts/register_pdfs.py` 检测文件变化，按页整理并校对内容。
-4. 内容写入 `src/pages/notes/`，构建后先本地预览，再发布到 Vercel。
+4. 内容写入 `src/pages/notes/`，构建后先本地预览，再推送到 GitHub，由 Cloudflare Pages 自动发布。
 
-原始 PDF、临时渲染图、环境变量和密钥均被 `.gitignore` 排除，不进入公开网站。
+原始 PDF、临时渲染图、环境变量和密钥均被 `.gitignore` 排除，不进入公开仓库。用于公开对照的压缩 WebP 页面图会放在 `public/note-pages/`。
 
 ## 免费公开部署
 

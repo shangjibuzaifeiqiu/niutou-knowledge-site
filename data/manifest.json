@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-07-12T15:46:06+08:00",
+  "updated_at": "2026-07-12T16:30:50+08:00",
   "documents": {
     "分析力学基础(2).pdf": {
       "subject": "分析力学",
@@ -9,12 +9,17 @@
       "size_mb": 26.07,
       "sha256": "5ac22b025ff4315b0406466382bb9baf921661eaf2c303b5f07535ab727f1465",
       "has_text_layer": false,
-      "status": "partial",
+      "status": "processed",
       "processed_pages": [
-        2
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
       ],
       "first_seen": "2026-07-12T11:42:32+08:00",
-      "last_seen": "2026-07-12T15:46:06+08:00"
+      "last_seen": "2026-07-12T16:30:50+08:00"
     },
     "数学分析（2）.pdf": {
       "subject": "数学分析",
@@ -23,12 +28,22 @@
       "size_mb": 46.98,
       "sha256": "0fd657d7aa16b86a87fbfca3b50d9e69430ceba40f63ec9ead25d8abc450b9b7",
       "has_text_layer": false,
-      "status": "partial",
+      "status": "processed",
       "processed_pages": [
-        1
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
       ],
       "first_seen": "2026-07-12T11:42:32+08:00",
-      "last_seen": "2026-07-12T15:46:06+08:00"
+      "last_seen": "2026-07-12T16:30:50+08:00"
     },
     "物理·电磁学(3).pdf": {
       "subject": "电磁学",
@@ -37,12 +52,14 @@
       "size_mb": 11.98,
       "sha256": "ac5145bb5be31f7c2e426a248d7a2d60535c5b4529afa2556315d3fa3fc6a774",
       "has_text_layer": false,
-      "status": "partial",
+      "status": "processed",
       "processed_pages": [
-        1
+        1,
+        2,
+        3
       ],
       "first_seen": "2026-07-12T11:42:32+08:00",
-      "last_seen": "2026-07-12T15:46:06+08:00"
+      "last_seen": "2026-07-12T16:30:50+08:00"
     }
   }
 }

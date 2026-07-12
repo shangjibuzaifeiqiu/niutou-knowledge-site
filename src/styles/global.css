@@ -112,6 +112,10 @@ nav a:hover { color: var(--mint-dark); }
 .prose blockquote p { margin: 0; color: var(--ink); }
 .prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 16px 0; }
 .prose code { background: #eaf3ef; border-radius: 6px; padding: 2px 6px; }
+.page-gallery { display: grid; gap: 22px; margin: 28px 0 12px; }
+.source-page { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.72); }
+.source-page img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid rgba(24,53,47,.08); }
+.source-page figcaption { margin-top: 10px; color: var(--muted); font-size: 13px; text-align: center; }
 .update-list { display: grid; gap: 16px; padding-bottom: 80px; }
 .update-entry { padding: 24px; display: grid; grid-template-columns: 130px 1fr; gap: 22px; }
 .update-entry time { color: var(--mint-dark); font-weight: 700; }
