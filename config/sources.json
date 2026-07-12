@@ -2,16 +2,22 @@
   "分析力学基础(2).pdf": {
     "subject": "分析力学",
     "course": "分析力学基础",
+    "slug": "mechanics",
+    "note": "src/pages/notes/virtual-displacement.md",
     "processed_pages": [1, 2, 3, 4, 5, 6]
   },
   "数学分析（2）.pdf": {
     "subject": "数学分析",
     "course": "数学分析",
+    "slug": "math-analysis",
+    "note": "src/pages/notes/linear-ordinary-differential-equations.md",
     "processed_pages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
   },
   "物理·电磁学(3).pdf": {
     "subject": "电磁学",
     "course": "电磁学",
+    "slug": "electromagnetism",
+    "note": "src/pages/notes/electrostatics-foundations.md",
     "processed_pages": [1, 2, 3]
   }
 }

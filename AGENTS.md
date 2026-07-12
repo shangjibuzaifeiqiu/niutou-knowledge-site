@@ -6,14 +6,15 @@
 
 ## 当用户说“更新网站”
 
-1. 运行 `scripts/register_pdfs.py`，根据 SHA-256 判断新增或变化的 PDF。
-2. 只处理 `data/manifest.json` 中新增、变化或尚未登记的页面。
-3. PDF 是扫描页时，必须视觉检查原页；不要依赖文本提取。
-4. 把内容整理到 `src/pages/notes/`，保留来源文件和页码。
-5. 明显错误可以修正，但必须在正文中添加“修正说明”。不确定内容标记为待复核，不要猜测。
-6. 更新 `config/sources.json` 的 `processed_pages` 和 `src/pages/updates.astro`。
-7. 运行 `update-site.ps1`，确认静态构建成功。
-8. 发布前检查桌面和移动端页面；原始 PDF、截图、密钥不得进入 `public/` 或 Git。
+1. 先阅读并执行 `docs/reusable-update-workflow.md`。
+2. 运行 `prepare-update.ps1`，根据 SHA-256 判断新增或变化的 PDF，并生成 `tmp/update-plan.md`。
+3. 只处理 `tmp/update-plan.md` 中 `needs_transcription` 列出的页面。
+4. PDF 是扫描页时，必须视觉检查原页；不要依赖文本提取。
+5. 把内容整理到 `src/pages/notes/`，保留来源文件和页码。
+6. 明显错误可以修正，但必须在正文中添加“修正说明”。不确定内容标记为待复核，不要猜测。
+7. 更新 `config/sources.json` 的 `processed_pages` 和 `src/pages/updates.astro`。
+8. 运行 `update-site.ps1`，确认静态构建成功。
+9. 发布前检查桌面和移动端页面；原始 PDF、截图、密钥不得进入 `public/` 或 Git。
 
 ## 内容结构
 

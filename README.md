@@ -6,10 +6,12 @@
 
 1. 把新增或替换的 PDF 放入 `input/`。
 2. 告诉 Codex“更新网站”。
-3. Codex 运行 `scripts/register_pdfs.py` 检测文件变化，按页整理并校对内容。
+3. Codex 先运行 `prepare-update.ps1` 检测文件变化并生成 `tmp/update-plan.md`。
 4. 内容写入 `src/pages/notes/`，构建后先本地预览，再推送到 GitHub，由 Cloudflare Pages 自动发布。
 
 原始 PDF、临时渲染图、环境变量和密钥均被 `.gitignore` 排除，不进入公开仓库。用于公开对照的压缩 WebP 页面图会放在 `public/note-pages/`。
+
+完整复用流程见 `docs/reusable-update-workflow.md`。最省额度的请求模板见 `templates/update-request.md`。
 
 ## 免费公开部署
 
@@ -23,6 +25,7 @@ Cloudflare Pages 作为免费入口使用，但不承诺中国大陆所有网络
 ```powershell
 npm install
 npm run dev
+.\prepare-update.ps1
 .\update-site.ps1
 ```
 
