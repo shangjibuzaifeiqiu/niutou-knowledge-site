@@ -3,252 +3,701 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
 const modules = import.meta.glob("./notes/*.md", { eager: true });
 const notes = Object.entries(modules)
-  .map(([path, mod]: any) => ({ id: path.replace("./", "/").replace(/\.md$/, ""), href: path.replace("./", "/").replace(/\.md$/, ""), ...mod.frontmatter }))
+  .map(([path, mod]: any) => ({
+    id: path.replace("./", "/").replace(/\.md$/, ""),
+    href: path.replace("./", "/").replace(/\.md$/, ""),
+    ...mod.frontmatter,
+  }))
   .sort((a, b) => String(a.title).localeCompare(String(b.title), "zh-CN"));
 ---
 
-<BaseLayout title="知识工作台" description="手动编辑知识点关系图和归档结构">
-  <section class="simple-hero studio-hero">
-    <span class="eyebrow">KNOWLEDGE STUDIO</span>
-    <h1>知识工作台</h1>
-    <p>在浏览器里拖动知识点、添加关系、导入导出 JSON。当前版本是静态网站，编辑结果先保存在本机。</p>
-  </section>
-
-  <section class="studio-layout">
-    <aside class="studio-panel">
-      <h2>关系编辑</h2>
-      <label>起点
-        <select id="edge-source"></select>
-      </label>
-      <label>关系
-        <input id="edge-label" value="关联" />
-      </label>
-      <label>终点
-        <select id="edge-target"></select>
-      </label>
-      <button class="button" type="button" id="add-edge">添加关系</button>
-      <button class="button button--ghost" type="button" id="export-graph">导出关系图</button>
-      <button class="button button--ghost" type="button" id="reset-graph">恢复默认</button>
-      <label>导入 JSON
-        <input id="import-graph" type="file" accept="application/json" />
-      </label>
-    </aside>
-
-    <div class="graph-workspace">
-      <div class="graph-toolbar">
-        <span>拖动节点调整布局，点击连线可删除。</span>
-      </div>
-      <svg id="knowledge-graph" class="knowledge-graph" role="img" aria-label="知识点关系图"></svg>
+<BaseLayout title="知识工作台" description="可拖拽、可缩放、可编辑的个人知识关系图">
+  <section class="studio-intro">
+    <div>
+      <span class="eyebrow">KNOWLEDGE STUDIO · 2.0</span>
+      <h1>把知识放到一张会生长的地图上</h1>
+      <p>查找知识点、梳理前后关系、调整学习路径。所有修改都会自动保存在当前浏览器。</p>
     </div>
-
-    <aside class="studio-panel">
-      <h2>当前关系</h2>
-      <div id="edge-list" class="edge-list"></div>
-    </aside>
+    <div class="studio-metrics" aria-label="知识库统计">
+      <div><strong>{notes.length}</strong><span>知识点</span></div>
+      <div><strong>{new Set(notes.map((note: any) => note.subject)).size}</strong><span>学科</span></div>
+      <div><strong id="relation-count">0</strong><span>关系</span></div>
+    </div>
   </section>
+
+  <section class="studio-app" aria-label="知识关系图编辑器">
+    <header class="studio-appbar">
+      <div class="studio-appbar__brand">
+        <span class="studio-live-dot"></span>
+        <strong>我的知识地图</strong>
+        <span id="save-state">已自动保存</span>
+      </div>
+      <div class="studio-appbar__actions">
+        <button class="studio-tool" type="button" id="undo" title="撤销 (Ctrl+Z)" aria-label="撤销">↶</button>
+        <button class="studio-tool" type="button" id="redo" title="重做 (Ctrl+Y)" aria-label="重做">↷</button>
+        <span class="studio-divider"></span>
+        <button class="studio-action" type="button" id="auto-layout">自动整理 <kbd>L</kbd></button>
+        <button class="studio-action" type="button" id="fit-view">适应画布 <kbd>F</kbd></button>
+        <button class="studio-tool" type="button" id="show-shortcuts" title="快捷键" aria-label="显示快捷键">?</button>
+      </div>
+    </header>
+
+    <div class="studio-body">
+      <aside class="studio-sidebar studio-library-panel">
+        <div class="studio-panel-heading">
+          <div><span>知识库</span><small>点击定位到画布</small></div>
+          <span id="visible-count" class="studio-count"></span>
+        </div>
+        <div class="studio-search-wrap">
+          <span>⌕</span>
+          <input id="node-search" type="search" placeholder="搜索知识点、章节…" autocomplete="off" />
+          <kbd>/</kbd>
+        </div>
+        <div id="subject-filters" class="studio-filter-row"></div>
+        <div id="node-library" class="studio-node-library"></div>
+      </aside>
+
+      <div class="studio-canvas-shell">
+        <div class="studio-canvas-tools" aria-label="画布工具">
+          <button class="canvas-mode is-active" type="button" data-mode="select" title="选择和移动 (V)"><span>↖</span>选择</button>
+          <button class="canvas-mode" type="button" data-mode="connect" title="连接两个知识点 (C)"><span>⌁</span>连线</button>
+          <button class="canvas-mode" type="button" data-mode="pan" title="平移画布 (H)"><span>✥</span>平移</button>
+        </div>
+        <svg id="knowledge-graph" class="knowledge-graph" role="img" aria-label="可编辑知识关系图"></svg>
+        <div class="studio-canvas-hint" id="canvas-hint">拖动节点 · 滚轮缩放 · 双击打开笔记</div>
+        <div class="studio-zoom-controls" aria-label="缩放控制">
+          <button type="button" id="zoom-out" aria-label="缩小">−</button>
+          <span id="zoom-value">100%</span>
+          <button type="button" id="zoom-in" aria-label="放大">＋</button>
+        </div>
+      </div>
+
+      <aside class="studio-sidebar studio-inspector">
+        <div id="inspector-empty" class="inspector-empty">
+          <span class="inspector-empty__icon">◎</span>
+          <h2>选择一个知识点</h2>
+          <p>查看它的归档信息和关系，或快速建立新的知识连接。</p>
+          <div class="inspector-tips">
+            <span><kbd>V</kbd> 选择</span>
+            <span><kbd>C</kbd> 连线</span>
+            <span><kbd>F</kbd> 适应画布</span>
+          </div>
+        </div>
+
+        <div id="node-inspector" hidden>
+          <div class="studio-panel-heading">
+            <div><span>知识点详情</span><small>当前选中</small></div>
+            <button class="studio-tool studio-tool--small" id="clear-selection" type="button" aria-label="取消选择">×</button>
+          </div>
+          <div class="inspector-subject" id="inspector-subject"></div>
+          <h2 id="inspector-title"></h2>
+          <p id="inspector-summary" class="inspector-summary"></p>
+          <dl class="inspector-meta">
+            <div><dt>课程</dt><dd id="inspector-course"></dd></div>
+            <div><dt>章节</dt><dd id="inspector-chapter"></dd></div>
+          </dl>
+          <a id="open-note" class="button inspector-open" href="/">打开完整笔记 <span>↗</span></a>
+
+          <div class="inspector-section">
+            <div class="inspector-section__title"><strong>添加关系</strong><span>从当前知识点出发</span></div>
+            <label>关系类型
+              <input id="edge-label" value="关联" list="edge-label-options" />
+              <datalist id="edge-label-options">
+                <option value="基础"></option><option value="推导"></option><option value="应用"></option>
+                <option value="对比"></option><option value="补充"></option><option value="关联"></option>
+              </datalist>
+            </label>
+            <label>连接到
+              <select id="edge-target"></select>
+            </label>
+            <button class="button" type="button" id="add-edge">建立连接</button>
+          </div>
+
+          <div class="inspector-section">
+            <div class="inspector-section__title"><strong>相关连接</strong><span id="selected-relation-count"></span></div>
+            <div id="edge-list" class="edge-list"></div>
+          </div>
+        </div>
+
+        <div id="edge-inspector" hidden>
+          <div class="studio-panel-heading">
+            <div><span>关系详情</span><small>点击画布空白处退出</small></div>
+            <button class="studio-tool studio-tool--small" id="clear-edge-selection" type="button" aria-label="取消选择">×</button>
+          </div>
+          <div class="edge-detail-route">
+            <strong id="edge-from-title"></strong><span>→</span><strong id="edge-to-title"></strong>
+          </div>
+          <label>关系名称
+            <input id="selected-edge-label" />
+          </label>
+          <button class="button" type="button" id="save-edge">保存修改</button>
+          <button class="button button--danger" type="button" id="delete-edge">删除这条关系</button>
+        </div>
+
+        <div class="studio-data-actions">
+          <strong>本地数据</strong>
+          <span>可导出备份，交给我即可写回网站源码。</span>
+          <div>
+            <button type="button" id="export-graph">导出 JSON</button>
+            <label class="studio-file-button">导入 JSON<input id="import-graph" type="file" accept="application/json" /></label>
+            <button type="button" id="reset-graph">恢复默认</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <dialog id="shortcut-dialog" class="shortcut-dialog">
+    <div class="shortcut-dialog__header"><div><span class="eyebrow">SHORTCUTS</span><h2>键盘快捷键</h2></div><button id="close-shortcuts" type="button" aria-label="关闭">×</button></div>
+    <div class="shortcut-grid">
+      <span><kbd>V</kbd>选择工具</span><span><kbd>C</kbd>快速连线</span>
+      <span><kbd>H</kbd>平移画布</span><span><kbd>F</kbd>适应全部</span>
+      <span><kbd>L</kbd>自动整理</span><span><kbd>/</kbd>搜索知识</span>
+      <span><kbd>Ctrl Z</kbd>撤销</span><span><kbd>Ctrl Y</kbd>重做</span>
+      <span><kbd>Delete</kbd>删除关系</span><span><kbd>Esc</kbd>取消操作</span>
+    </div>
+  </dialog>
+  <div id="studio-toast" class="studio-toast" role="status" aria-live="polite"></div>
 
   <script define:vars={{ notes }}>
     const storageKey = "niutou.graph.v1";
     const svg = document.querySelector("#knowledge-graph");
-    const sourceSelect = document.querySelector("#edge-source");
+    const nodeLibrary = document.querySelector("#node-library");
+    const subjectFilters = document.querySelector("#subject-filters");
+    const searchInput = document.querySelector("#node-search");
     const targetSelect = document.querySelector("#edge-target");
     const labelInput = document.querySelector("#edge-label");
     const edgeList = document.querySelector("#edge-list");
-    const addEdgeButton = document.querySelector("#add-edge");
-    const exportButton = document.querySelector("#export-graph");
-    const resetButton = document.querySelector("#reset-graph");
-    const importInput = document.querySelector("#import-graph");
-    let draggingId = "";
+    const relationCount = document.querySelector("#relation-count");
+    const visibleCount = document.querySelector("#visible-count");
+    const zoomValue = document.querySelector("#zoom-value");
+    const canvasHint = document.querySelector("#canvas-hint");
+    const saveIndicator = document.querySelector("#save-state");
+    const toast = document.querySelector("#studio-toast");
+    const NS = "http://www.w3.org/2000/svg";
+    const NODE_W = 210;
+    const NODE_H = 78;
+    const subjects = [...new Set(notes.map((note) => note.subject))];
 
     const baseNodes = notes.map((note, index) => ({
       id: note.id,
       title: note.title,
       subject: note.subject,
+      course: note.course,
+      chapter: note.chapter,
+      summary: note.summary,
       href: note.href,
-      x: 220 + (index % 5) * 190,
-      y: 140 + Math.floor(index / 5) * 135,
+      x: 180 + (index % 5) * 280,
+      y: 150 + Math.floor(index / 5) * 150,
     }));
 
     const defaultEdges = [
       ["em-coulomb-electric-field", "基础", "em-gauss-law"],
+      ["em-coulomb-electric-field", "推导", "em-electric-potential"],
       ["em-gauss-law", "扩展", "em-dielectric-displacement-energy"],
       ["em-biot-savart-ampere", "介质中", "em-magnetic-media"],
       ["em-electromagnetic-induction", "补全", "em-displacement-current-maxwell"],
-      ["em-displacement-current-maxwell", "推出", "em-electromagnetic-waves"],
-      ["mechanics-constraints-virtual-displacement", "进入", "mechanics-generalized-coordinates-virtual-work"],
-      ["mechanics-generalized-coordinates-virtual-work", "进入", "mechanics-dalembert-lagrange"],
+      ["em-displacement-current-maxwell", "推导", "em-electromagnetic-waves"],
+      ["mechanics-constraints-virtual-displacement", "基础", "mechanics-generalized-coordinates-virtual-work"],
+      ["mechanics-generalized-coordinates-virtual-work", "推导", "mechanics-dalembert-lagrange"],
+      ["mechanics-dalembert-lagrange", "得到", "mechanics-energy-integral"],
       ["math-multivariable-limits-differentiability", "工具", "math-composite-implicit-gradient"],
       ["math-multiple-integrals", "进阶", "math-line-surface-integrals"],
       ["math-infinite-series", "进阶", "math-function-series-power-series"],
-    ].map(([from, label, to]) => ({
-      from: `/notes/${from}`,
-      label,
-      to: `/notes/${to}`,
-    }));
+    ].map(([from, label, to]) => ({ from: `/notes/${from}`, label, to: `/notes/${to}` }));
 
+    const clone = (value) => JSON.parse(JSON.stringify(value));
     const loadState = () => {
-      try {
-        return JSON.parse(localStorage.getItem(storageKey) || "null");
-      } catch {
-        return null;
-      }
+      try { return JSON.parse(localStorage.getItem(storageKey) || "null"); }
+      catch { return null; }
+    };
+    const normalizeState = (saved) => {
+      const savedPositions = new Map((saved?.nodes || []).map((node) => [node.id, node]));
+      const validIds = new Set(baseNodes.map((node) => node.id));
+      const nodes = baseNodes.map((node) => {
+        const old = savedPositions.get(node.id);
+        return { ...node, x: Number(old?.x) || node.x, y: Number(old?.y) || node.y };
+      });
+      const edges = Array.isArray(saved?.edges)
+        ? saved.edges.filter((edge) => validIds.has(edge.from) && validIds.has(edge.to) && edge.from !== edge.to)
+        : clone(defaultEdges);
+      return { version: 2, nodes, edges };
     };
 
-    let state = loadState() || { version: 1, nodes: baseNodes, edges: defaultEdges };
+    let state = normalizeState(loadState());
+    let selectedNodeId = "";
+    let selectedEdgeIndex = -1;
+    let activeSubject = "全部";
+    let mode = "select";
+    let connectFrom = "";
+    let drag = null;
+    let pan = null;
+    let spaceDown = false;
+    let view = { x: 0, y: 0, w: 1600, h: 960 };
+    const history = [];
+    const future = [];
 
-    const saveState = () => localStorage.setItem(storageKey, JSON.stringify(state, null, 2));
-    const nodeById = () => new Map(state.nodes.map((node) => [node.id, node]));
+    const nodeMap = () => new Map(state.nodes.map((node) => [node.id, node]));
+    const snapshot = () => clone(state);
+    const save = () => {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      saveIndicator.textContent = "保存中…";
+      window.setTimeout(() => { saveIndicator.textContent = "已自动保存"; }, 380);
+    };
+    const announce = (message) => {
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      window.clearTimeout(announce.timer);
+      announce.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
+    };
+    const commit = (mutate, message) => {
+      history.push(snapshot());
+      if (history.length > 40) history.shift();
+      future.length = 0;
+      mutate();
+      save();
+      renderAll();
+      if (message) announce(message);
+    };
+    const restore = (next) => {
+      state = normalizeState(next);
+      selectedEdgeIndex = -1;
+      save();
+      renderAll();
+    };
+    const undo = () => {
+      if (!history.length) return announce("没有可撤销的操作");
+      future.push(snapshot());
+      restore(history.pop());
+      announce("已撤销");
+    };
+    const redo = () => {
+      if (!future.length) return announce("没有可重做的操作");
+      history.push(snapshot());
+      restore(future.pop());
+      announce("已重做");
+    };
 
-    const populateSelects = () => {
-      [sourceSelect, targetSelect].forEach((select) => {
-        select.innerHTML = "";
-        baseNodes.forEach((node) => {
-          const option = document.createElement("option");
-          option.value = node.id;
-          option.textContent = node.title;
-          select.appendChild(option);
-        });
+    const subjectClass = (subject) => subject === "数学分析" ? "math" : subject === "分析力学" ? "mechanics" : "em";
+    const truncate = (text, length) => text.length > length ? `${text.slice(0, length)}…` : text;
+    const svgElement = (name, attrs = {}) => {
+      const element = document.createElementNS(NS, name);
+      Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
+      return element;
+    };
+    const screenToWorld = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect();
+      return { x: view.x + (clientX - rect.left) / rect.width * view.w, y: view.y + (clientY - rect.top) / rect.height * view.h };
+    };
+    const updateView = () => {
+      svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+      zoomValue.textContent = `${Math.round(160000 / view.w)}%`;
+    };
+
+    const renderFilters = () => {
+      subjectFilters.innerHTML = "";
+      ["全部", ...subjects].forEach((subject) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = subject;
+        button.className = subject === activeSubject ? "is-active" : "";
+        button.addEventListener("click", () => { activeSubject = subject; renderFilters(); renderLibrary(); });
+        subjectFilters.appendChild(button);
       });
     };
 
-    const subjectClass = (subject) => {
-      if (subject === "数学分析") return "math";
-      if (subject === "分析力学") return "mechanics";
-      return "em";
+    const filteredNodes = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      return state.nodes.filter((node) => (activeSubject === "全部" || node.subject === activeSubject) &&
+        (!query || `${node.title} ${node.subject} ${node.course} ${node.chapter}`.toLowerCase().includes(query)));
     };
 
-    const render = () => {
-      if (!svg) return;
-      const nodes = nodeById();
-      svg.setAttribute("viewBox", "0 0 1160 760");
-      svg.innerHTML = "";
+    const renderLibrary = () => {
+      const result = filteredNodes();
+      nodeLibrary.innerHTML = "";
+      visibleCount.textContent = `${result.length}/${state.nodes.length}`;
+      if (!result.length) {
+        nodeLibrary.innerHTML = `<div class="studio-no-results">没有匹配的知识点</div>`;
+        return;
+      }
+      const grouped = new Map();
+      result.forEach((node) => {
+        const key = node.chapter || node.subject;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(node);
+      });
+      grouped.forEach((items, chapter) => {
+        const section = document.createElement("section");
+        section.className = "library-group";
+        section.innerHTML = `<h3>${chapter}<span>${items.length}</span></h3>`;
+        items.forEach((node) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `library-node ${selectedNodeId === node.id ? "is-selected" : ""}`;
+          button.innerHTML = `<i class="${subjectClass(node.subject)}"></i><span><strong>${node.title}</strong><small>${node.subject}</small></span>`;
+          button.addEventListener("click", () => { selectNode(node.id); centerNode(node.id); });
+          section.appendChild(button);
+        });
+        nodeLibrary.appendChild(section);
+      });
+    };
 
-      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-      defs.innerHTML = `<marker id="arrow-head" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#6f8f86"></path></marker>`;
+    const edgePath = (from, to) => {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        const startX = from.x + Math.sign(dx || 1) * NODE_W / 2;
+        const endX = to.x - Math.sign(dx || 1) * NODE_W / 2;
+        const curve = Math.max(70, Math.abs(endX - startX) * .42);
+        return `M ${startX} ${from.y} C ${startX + Math.sign(dx || 1) * curve} ${from.y}, ${endX - Math.sign(dx || 1) * curve} ${to.y}, ${endX} ${to.y}`;
+      }
+      const startY = from.y + Math.sign(dy || 1) * NODE_H / 2;
+      const endY = to.y - Math.sign(dy || 1) * NODE_H / 2;
+      const curve = Math.max(55, Math.abs(endY - startY) * .42);
+      return `M ${from.x} ${startY} C ${from.x} ${startY + Math.sign(dy || 1) * curve}, ${to.x} ${endY - Math.sign(dy || 1) * curve}, ${to.x} ${endY}`;
+    };
+
+    const renderGraph = () => {
+      const nodes = nodeMap();
+      svg.innerHTML = "";
+      const defs = svgElement("defs");
+      defs.innerHTML = `<pattern id="dot-grid" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.5" fill="#b7ccc3" opacity=".5"/></pattern><marker id="arrow-head" markerWidth="10" markerHeight="10" refX="8.2" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#819d93"/></marker>`;
       svg.appendChild(defs);
+      const backdrop = svgElement("rect", { x: -5000, y: -5000, width: 10000, height: 10000, fill: "url(#dot-grid)", class: "graph-backdrop" });
+      svg.appendChild(backdrop);
 
       state.edges.forEach((edge, index) => {
         const from = nodes.get(edge.from);
         const to = nodes.get(edge.to);
         if (!from || !to) return;
-        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        group.classList.add("graph-edge");
-        group.dataset.index = String(index);
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", from.x);
-        line.setAttribute("y1", from.y);
-        line.setAttribute("x2", to.x);
-        line.setAttribute("y2", to.y);
-        line.setAttribute("marker-end", "url(#arrow-head)");
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.setAttribute("x", String((from.x + to.x) / 2));
-        text.setAttribute("y", String((from.y + to.y) / 2 - 8));
+        const group = svgElement("g", { class: `graph-edge ${selectedEdgeIndex === index ? "is-selected" : ""}` });
+        const hit = svgElement("path", { d: edgePath(from, to), class: "graph-edge__hit" });
+        const path = svgElement("path", { d: edgePath(from, to), class: "graph-edge__line", "marker-end": "url(#arrow-head)" });
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2;
+        const labelBg = svgElement("rect", { x: midX - Math.max(25, edge.label.length * 7), y: midY - 14, width: Math.max(50, edge.label.length * 14), height: 27, rx: 13.5, class: "graph-edge__label-bg" });
+        const text = svgElement("text", { x: midX, y: midY + 4, "text-anchor": "middle", class: "graph-edge__label" });
         text.textContent = edge.label;
-        group.append(line, text);
-        group.addEventListener("click", () => {
-          state.edges.splice(index, 1);
-          saveState();
-          render();
-        });
+        group.append(hit, path, labelBg, text);
+        group.addEventListener("pointerdown", (event) => { event.stopPropagation(); selectedEdgeIndex = index; selectedNodeId = ""; renderAll(); });
         svg.appendChild(group);
       });
 
       state.nodes.forEach((node) => {
-        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        group.classList.add("graph-node", subjectClass(node.subject));
-        group.dataset.id = node.id;
-        group.setAttribute("transform", `translate(${node.x}, ${node.y})`);
-        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute("x", "-78");
-        rect.setAttribute("y", "-28");
-        rect.setAttribute("width", "156");
-        rect.setAttribute("height", "56");
-        rect.setAttribute("rx", "8");
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("dominant-baseline", "middle");
-        text.textContent = node.title.length > 12 ? `${node.title.slice(0, 12)}…` : node.title;
-        group.append(rect, text);
-        group.addEventListener("pointerdown", (event) => {
-          draggingId = node.id;
-          svg.setPointerCapture(event.pointerId);
-        });
-        group.addEventListener("dblclick", () => window.location.href = node.href);
+        const selected = selectedNodeId === node.id;
+        const connecting = connectFrom === node.id;
+        const group = svgElement("g", { class: `graph-node ${subjectClass(node.subject)} ${selected ? "is-selected" : ""} ${connecting ? "is-connecting" : ""}`, transform: `translate(${node.x}, ${node.y})`, tabindex: 0, role: "button", "aria-label": node.title });
+        const rect = svgElement("rect", { x: -NODE_W / 2, y: -NODE_H / 2, width: NODE_W, height: NODE_H, rx: 15 });
+        const accent = svgElement("rect", { x: -NODE_W / 2, y: -NODE_H / 2, width: 6, height: NODE_H, rx: 3, class: "graph-node__accent" });
+        const subjectText = svgElement("text", { x: -88, y: -13, class: "graph-node__subject" });
+        subjectText.textContent = `${node.subject} · ${truncate(node.chapter, 8)}`;
+        const title = svgElement("text", { x: -88, y: 14, class: "graph-node__title" });
+        title.textContent = truncate(node.title, 15);
+        const anchor = svgElement("circle", { cx: NODE_W / 2, cy: 0, r: 5, class: "graph-node__anchor" });
+        group.append(rect, accent, subjectText, title, anchor);
+        group.addEventListener("pointerdown", (event) => onNodePointerDown(event, node));
+        group.addEventListener("dblclick", (event) => { event.stopPropagation(); window.location.href = node.href; });
+        group.addEventListener("keydown", (event) => { if (event.key === "Enter") selectNode(node.id); });
         svg.appendChild(group);
       });
-
-      renderEdgeList();
+      updateView();
     };
 
-    const renderEdgeList = () => {
-      const nodes = nodeById();
-      edgeList.innerHTML = "";
-      state.edges.forEach((edge, index) => {
-        const row = document.createElement("button");
-        row.className = "edge-row";
-        row.type = "button";
-        row.textContent = `${nodes.get(edge.from)?.title || "未知"} ${edge.label} ${nodes.get(edge.to)?.title || "未知"}`;
-        row.addEventListener("click", () => {
-          state.edges.splice(index, 1);
-          saveState();
-          render();
+    const renderInspector = () => {
+      const empty = document.querySelector("#inspector-empty");
+      const nodePanel = document.querySelector("#node-inspector");
+      const edgePanel = document.querySelector("#edge-inspector");
+      empty.hidden = Boolean(selectedNodeId) || selectedEdgeIndex >= 0;
+      nodePanel.hidden = !selectedNodeId;
+      edgePanel.hidden = selectedEdgeIndex < 0;
+
+      const nodes = nodeMap();
+      if (selectedNodeId) {
+        const node = nodes.get(selectedNodeId);
+        if (!node) return;
+        document.querySelector("#inspector-subject").textContent = node.subject;
+        document.querySelector("#inspector-subject").className = `inspector-subject ${subjectClass(node.subject)}`;
+        document.querySelector("#inspector-title").textContent = node.title;
+        document.querySelector("#inspector-summary").textContent = node.summary || "暂无摘要";
+        document.querySelector("#inspector-course").textContent = node.course || "—";
+        document.querySelector("#inspector-chapter").textContent = node.chapter || "—";
+        document.querySelector("#open-note").href = node.href;
+        targetSelect.innerHTML = "";
+        state.nodes.filter((item) => item.id !== node.id).forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = `${item.title} · ${item.subject}`;
+          targetSelect.appendChild(option);
         });
-        edgeList.appendChild(row);
-      });
+        const related = state.edges.map((edge, index) => ({ edge, index })).filter(({ edge }) => edge.from === node.id || edge.to === node.id);
+        document.querySelector("#selected-relation-count").textContent = `${related.length} 条`;
+        edgeList.innerHTML = "";
+        if (!related.length) edgeList.innerHTML = `<p class="edge-list-empty">还没有连接，先建立第一条关系。</p>`;
+        related.forEach(({ edge, index }) => {
+          const outgoing = edge.from === node.id;
+          const other = nodes.get(outgoing ? edge.to : edge.from);
+          const row = document.createElement("button");
+          row.className = "edge-row";
+          row.type = "button";
+          row.innerHTML = `<span>${outgoing ? "→" : "←"}</span><span><strong>${edge.label}</strong><small>${other?.title || "未知知识点"}</small></span>`;
+          row.addEventListener("click", () => { selectedNodeId = ""; selectedEdgeIndex = index; renderAll(); });
+          edgeList.appendChild(row);
+        });
+      }
+
+      if (selectedEdgeIndex >= 0) {
+        const edge = state.edges[selectedEdgeIndex];
+        if (!edge) { selectedEdgeIndex = -1; return renderInspector(); }
+        document.querySelector("#edge-from-title").textContent = nodes.get(edge.from)?.title || "未知";
+        document.querySelector("#edge-to-title").textContent = nodes.get(edge.to)?.title || "未知";
+        document.querySelector("#selected-edge-label").value = edge.label;
+      }
+      relationCount.textContent = String(state.edges.length);
     };
 
-    const downloadJson = () => {
+    const renderAll = () => {
+      renderGraph();
+      renderLibrary();
+      renderInspector();
+      document.querySelector("#undo").disabled = !history.length;
+      document.querySelector("#redo").disabled = !future.length;
+    };
+
+    const selectNode = (id) => {
+      if (mode === "connect") {
+        if (!connectFrom) {
+          connectFrom = id;
+          selectedNodeId = id;
+          canvasHint.textContent = "再点击一个知识点，即可建立连接";
+          renderAll();
+          return;
+        }
+        if (connectFrom !== id) {
+          const from = connectFrom;
+          connectFrom = "";
+          if (state.edges.some((edge) => edge.from === from && edge.to === id)) {
+            announce("这两个知识点已经有连接了");
+            setMode("select");
+            return;
+          }
+          commit(() => state.edges.push({ from, to: id, label: "关联" }), "已建立连接");
+          setMode("select");
+        }
+        return;
+      }
+      selectedNodeId = id;
+      selectedEdgeIndex = -1;
+      renderAll();
+    };
+
+    const onNodePointerDown = (event, node) => {
+      event.stopPropagation();
+      if (event.detail === 2) {
+        window.location.href = node.href;
+        return;
+      }
+      if (mode === "connect") return selectNode(node.id);
+      if (mode === "pan" || event.button === 1 || spaceDown) return;
+      selectedNodeId = node.id;
+      selectedEdgeIndex = -1;
+      const point = screenToWorld(event.clientX, event.clientY);
+      drag = { id: node.id, pointerId: event.pointerId, offsetX: point.x - node.x, offsetY: point.y - node.y, before: snapshot(), moved: false };
+      svg.setPointerCapture(event.pointerId);
+      renderAll();
+    };
+
+    const setMode = (next) => {
+      mode = next;
+      if (next !== "connect") connectFrom = "";
+      document.querySelectorAll(".canvas-mode").forEach((button) => button.classList.toggle("is-active", button.dataset.mode === next));
+      svg.dataset.mode = next;
+      canvasHint.textContent = next === "connect" ? "依次点击两个知识点建立连接" : next === "pan" ? "拖动画布查看其他区域" : "拖动节点 · 滚轮缩放 · 双击打开笔记";
+      renderGraph();
+    };
+
+    const centerNode = (id) => {
+      const node = nodeMap().get(id);
+      if (!node) return;
+      view.x = node.x - view.w / 2;
+      view.y = node.y - view.h / 2;
+      updateView();
+    };
+
+    const zoomAt = (factor, clientX, clientY) => {
+      const rect = svg.getBoundingClientRect();
+      const cx = clientX ?? rect.left + rect.width / 2;
+      const cy = clientY ?? rect.top + rect.height / 2;
+      const before = screenToWorld(cx, cy);
+      const nextW = Math.max(620, Math.min(3200, view.w * factor));
+      const nextH = nextW * rect.height / rect.width;
+      const rx = (cx - rect.left) / rect.width;
+      const ry = (cy - rect.top) / rect.height;
+      view = { x: before.x - rx * nextW, y: before.y - ry * nextH, w: nextW, h: nextH };
+      updateView();
+    };
+
+    const fitView = () => {
+      if (!state.nodes.length) return;
+      const xs = state.nodes.map((node) => node.x);
+      const ys = state.nodes.map((node) => node.y);
+      const minX = Math.min(...xs) - 170;
+      const maxX = Math.max(...xs) + 170;
+      const minY = Math.min(...ys) - 120;
+      const maxY = Math.max(...ys) + 120;
+      const rect = svg.getBoundingClientRect();
+      const dataW = maxX - minX;
+      const dataH = maxY - minY;
+      const width = Math.max(dataW, dataH * rect.width / rect.height, 700);
+      view = { x: (minX + maxX - width) / 2, y: (minY + maxY - width * rect.height / rect.width) / 2, w: width, h: width * rect.height / rect.width };
+      updateView();
+      announce("已显示全部知识点");
+    };
+
+    const autoLayout = () => {
+      commit(() => {
+        const columns = subjects.map((subject) => state.nodes.filter((node) => node.subject === subject));
+        columns.forEach((items, column) => {
+          const byChapter = new Map();
+          items.forEach((node) => {
+            if (!byChapter.has(node.chapter)) byChapter.set(node.chapter, []);
+            byChapter.get(node.chapter).push(node);
+          });
+          let row = 0;
+          byChapter.forEach((chapterNodes) => {
+            chapterNodes.forEach((node) => {
+              node.x = 220 + column * 480 + (row % 2) * 230;
+              node.y = 130 + Math.floor(row / 2) * 130;
+              row += 1;
+            });
+            row += row % 2;
+          });
+        });
+      }, "已按学科与章节自动整理");
+      window.setTimeout(fitView, 40);
+    };
+
+    svg.addEventListener("pointerdown", (event) => {
+      if (event.target.closest?.(".graph-node, .graph-edge")) return;
+      selectedNodeId = "";
+      selectedEdgeIndex = -1;
+      if (mode === "pan" || event.button === 1 || spaceDown || event.target.classList.contains("graph-backdrop")) {
+        pan = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, startX: view.x, startY: view.y };
+        svg.setPointerCapture(event.pointerId);
+      }
+      renderAll();
+    });
+    svg.addEventListener("pointermove", (event) => {
+      if (drag) {
+        const node = nodeMap().get(drag.id);
+        const point = screenToWorld(event.clientX, event.clientY);
+        node.x = point.x - drag.offsetX;
+        node.y = point.y - drag.offsetY;
+        drag.moved = true;
+        renderGraph();
+      } else if (pan) {
+        const rect = svg.getBoundingClientRect();
+        view.x = pan.startX - (event.clientX - pan.clientX) / rect.width * view.w;
+        view.y = pan.startY - (event.clientY - pan.clientY) / rect.height * view.h;
+        updateView();
+      }
+    });
+    svg.addEventListener("pointerup", (event) => {
+      if (drag) {
+        if (drag.moved) {
+          history.push(drag.before);
+          future.length = 0;
+          save();
+          announce("位置已保存");
+        }
+        drag = null;
+      }
+      pan = null;
+      if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+      renderAll();
+    });
+    svg.addEventListener("wheel", (event) => { event.preventDefault(); zoomAt(event.deltaY > 0 ? 1.12 : .89, event.clientX, event.clientY); }, { passive: false });
+
+    document.querySelectorAll(".canvas-mode").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
+    searchInput.addEventListener("input", renderLibrary);
+    document.querySelector("#undo").addEventListener("click", undo);
+    document.querySelector("#redo").addEventListener("click", redo);
+    document.querySelector("#auto-layout").addEventListener("click", autoLayout);
+    document.querySelector("#fit-view").addEventListener("click", fitView);
+    document.querySelector("#zoom-in").addEventListener("click", () => zoomAt(.84));
+    document.querySelector("#zoom-out").addEventListener("click", () => zoomAt(1.18));
+    document.querySelector("#clear-selection").addEventListener("click", () => { selectedNodeId = ""; renderAll(); });
+    document.querySelector("#clear-edge-selection").addEventListener("click", () => { selectedEdgeIndex = -1; renderAll(); });
+    document.querySelector("#add-edge").addEventListener("click", () => {
+      if (!selectedNodeId || !targetSelect.value) return;
+      const duplicate = state.edges.some((edge) => edge.from === selectedNodeId && edge.to === targetSelect.value);
+      if (duplicate) return announce("这两个知识点已经有连接了");
+      const from = selectedNodeId;
+      const to = targetSelect.value;
+      const label = labelInput.value.trim() || "关联";
+      commit(() => state.edges.push({ from, to, label }), "已建立连接");
+    });
+    document.querySelector("#save-edge").addEventListener("click", () => {
+      const value = document.querySelector("#selected-edge-label").value.trim();
+      if (selectedEdgeIndex < 0 || !value) return;
+      const index = selectedEdgeIndex;
+      commit(() => { state.edges[index].label = value; }, "关系已更新");
+    });
+    document.querySelector("#delete-edge").addEventListener("click", () => {
+      if (selectedEdgeIndex < 0) return;
+      const index = selectedEdgeIndex;
+      commit(() => { state.edges.splice(index, 1); selectedEdgeIndex = -1; }, "关系已删除");
+    });
+    document.querySelector("#export-graph").addEventListener("click", () => {
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "niutou-knowledge-graph.json";
+      link.download = `niutou-knowledge-graph-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
-    };
-
-    populateSelects();
-    addEdgeButton?.addEventListener("click", () => {
-      if (sourceSelect.value === targetSelect.value) return;
-      state.edges.push({ from: sourceSelect.value, to: targetSelect.value, label: labelInput.value.trim() || "关联" });
-      saveState();
-      render();
+      announce("关系图已导出");
     });
-    exportButton?.addEventListener("click", downloadJson);
-    resetButton?.addEventListener("click", () => {
-      state = { version: 1, nodes: baseNodes, edges: defaultEdges };
-      saveState();
-      render();
-    });
-    importInput?.addEventListener("change", async () => {
-      const file = importInput.files?.[0];
+    document.querySelector("#import-graph").addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
       if (!file) return;
-      state = JSON.parse(await file.text());
-      saveState();
-      render();
+      try {
+        const imported = JSON.parse(await file.text());
+        if (!Array.isArray(imported.nodes) || !Array.isArray(imported.edges)) throw new Error("invalid");
+        commit(() => { state = normalizeState(imported); selectedNodeId = ""; selectedEdgeIndex = -1; }, "导入成功");
+        fitView();
+      } catch { announce("文件格式不正确"); }
+      event.target.value = "";
     });
-    svg?.addEventListener("pointermove", (event) => {
-      if (!draggingId) return;
-      const node = state.nodes.find((item) => item.id === draggingId);
-      if (!node) return;
-      const point = svg.createSVGPoint();
-      point.x = event.clientX;
-      point.y = event.clientY;
-      const cursor = point.matrixTransform(svg.getScreenCTM().inverse());
-      node.x = Math.max(90, Math.min(1070, cursor.x));
-      node.y = Math.max(60, Math.min(700, cursor.y));
-      render();
+    document.querySelector("#reset-graph").addEventListener("click", () => {
+      if (!window.confirm("恢复默认布局和关系？当前本地修改可先导出备份。")) return;
+      commit(() => { state = normalizeState(null); selectedNodeId = ""; selectedEdgeIndex = -1; }, "已恢复默认");
+      fitView();
     });
-    svg?.addEventListener("pointerup", () => {
-      if (!draggingId) return;
-      draggingId = "";
-      saveState();
+
+    const dialog = document.querySelector("#shortcut-dialog");
+    document.querySelector("#show-shortcuts").addEventListener("click", () => dialog.showModal());
+    document.querySelector("#close-shortcuts").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+    document.addEventListener("keydown", (event) => {
+      const editing = event.target.matches?.("input, select, textarea");
+      if (event.code === "Space" && !editing) { spaceDown = true; event.preventDefault(); }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
+      if (editing) return;
+      if (event.key === "/") { event.preventDefault(); searchInput.focus(); }
+      else if (event.key.toLowerCase() === "v") setMode("select");
+      else if (event.key.toLowerCase() === "c") setMode("connect");
+      else if (event.key.toLowerCase() === "h") setMode("pan");
+      else if (event.key.toLowerCase() === "f") fitView();
+      else if (event.key.toLowerCase() === "l") autoLayout();
+      else if (event.key === "?" || event.key === "F1") { event.preventDefault(); dialog.showModal(); }
+      else if ((event.key === "Delete" || event.key === "Backspace") && selectedEdgeIndex >= 0) document.querySelector("#delete-edge").click();
+      else if (event.key === "Escape") { connectFrom = ""; selectedNodeId = ""; selectedEdgeIndex = -1; setMode("select"); renderAll(); }
     });
-    svg?.addEventListener("pointerleave", () => {
-      if (!draggingId) return;
-      draggingId = "";
-      saveState();
-    });
-    render();
+    document.addEventListener("keyup", (event) => { if (event.code === "Space") spaceDown = false; });
+
+    renderFilters();
+    renderAll();
+    window.setTimeout(fitView, 60);
   </script>
 </BaseLayout>
