@@ -1,0 +1,26 @@
+---
+interface Props {
+  href: string;
+  title: string;
+  subject: string;
+  summary: string;
+  pages: string;
+  updated: string;
+}
+
+const { href, title, subject, summary, pages, updated } = Astro.props;
+const updatedLabel = String(updated).slice(0, 10);
+---
+
+<a class="note-card" href={href}>
+  <div class="note-card__meta">
+    <span class="pill">{subject}</span>
+    <span>{pages}</span>
+  </div>
+  <h3>{title}</h3>
+  <p>{summary}</p>
+  <div class="note-card__footer">
+    <span>更新于 {updatedLabel}</span>
+    <span class="arrow" aria-hidden="true">↗</span>
+  </div>
+</a>

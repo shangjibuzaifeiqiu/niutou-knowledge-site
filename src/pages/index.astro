@@ -1,0 +1,61 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import BullMark from "../components/BullMark.astro";
+import NoteCard from "../components/NoteCard.astro";
+import { site, subjects } from "../data/site";
+
+const modules = import.meta.glob("./notes/*.md", { eager: true });
+const notes = Object.entries(modules)
+  .map(([path, mod]: any) => ({ href: path.replace("./", "/").replace(/\.md$/, ""), ...mod.frontmatter }))
+  .sort((a, b) => String(b.updated).localeCompare(String(a.updated)))
+  .slice(0, 3);
+---
+
+<BaseLayout>
+  <section class="hero">
+    <div class="hero__copy">
+      <span class="eyebrow">PERSONAL KNOWLEDGE ATLAS</span>
+      <h1>牛头的<em>脑袋</em></h1>
+      <p>{site.description} 这里保留推导的来路，也记录每一次更正。</p>
+      <div class="hero__actions">
+        <a class="button" href="/library">进入知识库</a>
+        <a class="button button--ghost" href="/about">了解整理方法</a>
+      </div>
+    </div>
+    <div class="hero__visual">
+      <div class="orbit">
+        <BullMark />
+        <span class="orbit__tag">∫ 数学分析</span>
+        <span class="orbit__tag">δ 分析力学</span>
+        <span class="orbit__tag">E 电磁学</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-heading">
+      <div><span class="eyebrow">SUBJECT MAP</span><h2>从学科进入</h2></div>
+      <p>先按课程建立稳定骨架，再让定义、公式与推导跨章节连接。</p>
+    </div>
+    <div class="subject-grid">
+      {subjects.map((subject) => (
+        <a class={`subject-card ${subject.tone}`} href={`/library?q=${encodeURIComponent(subject.name)}`}>
+          <span class="subject-card__icon">{subject.icon}</span>
+          <h3>{subject.name}</h3>
+          <p>{subject.description}</p>
+          <span>查看相关笔记 →</span>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-heading">
+      <div><span class="eyebrow">LATEST NOTES</span><h2>最近整理</h2></div>
+      <p>所有页面都会保留来源文件与页码；修正会写入正文，而不是悄悄覆盖。</p>
+    </div>
+    <div class="note-grid">
+      {notes.map((note: any) => <NoteCard {...note} />)}
+    </div>
+  </section>
+</BaseLayout>

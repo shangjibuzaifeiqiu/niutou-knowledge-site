@@ -1,0 +1,41 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import NoteCard from "../components/NoteCard.astro";
+
+const modules = import.meta.glob("./notes/*.md", { eager: true });
+const notes = Object.entries(modules)
+  .map(([path, mod]: any) => ({ href: path.replace("./", "/").replace(/\.md$/, ""), ...mod.frontmatter }))
+  .sort((a, b) => String(a.subject).localeCompare(String(b.subject), "zh-CN"));
+---
+
+<BaseLayout title="知识库" description="数学与物理手写笔记整理后的知识页面">
+  <section class="library-hero">
+    <span class="eyebrow">KNOWLEDGE LIBRARY</span>
+    <h1>知识库</h1>
+    <p>搜索课程、概念、公式或标签。每篇内容都能回到对应的原笔记页。</p>
+    <input id="search" class="search-box" type="search" placeholder="试试：虚位移、静电场、微分方程…" aria-label="搜索知识库" />
+  </section>
+  <section class="note-grid" id="note-grid">
+    {notes.map((note: any) => (
+      <div data-note data-search={`${note.title} ${note.subject} ${note.summary} ${(note.tags || []).join(" ")}`}>
+        <NoteCard {...note} />
+      </div>
+    ))}
+  </section>
+  <div style="height: 80px"></div>
+  <script>
+    const input = document.querySelector<HTMLInputElement>("#search");
+    const cards = [...document.querySelectorAll<HTMLElement>("[data-note]")];
+    const params = new URLSearchParams(window.location.search);
+    const initial = params.get("q") || "";
+    if (input) input.value = initial;
+    const filter = () => {
+      const query = (input?.value || "").trim().toLowerCase();
+      cards.forEach((card) => {
+        card.hidden = query.length > 0 && !(card.dataset.search || "").toLowerCase().includes(query);
+      });
+    };
+    input?.addEventListener("input", filter);
+    filter();
+  </script>
+</BaseLayout>

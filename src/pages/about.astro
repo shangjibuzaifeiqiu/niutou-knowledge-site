@@ -1,0 +1,20 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="关于">
+  <section class="simple-hero">
+    <span class="eyebrow">ABOUT THE PROJECT</span>
+    <h1>纸面之外，<br />让知识继续生长。</h1>
+    <p>“牛头的脑袋”从个人手写笔记出发，忠实转写、适度整理，并允许对明确错误作有记录的修正。</p>
+  </section>
+  <article class="prose" style="max-width: 760px; padding-bottom: 100px">
+    <h2>整理原则</h2>
+    <p>原始 PDF 始终保留在本地。公开网站只包含整理后的内容，不公开原图、识别中间数据或密钥。</p>
+    <blockquote><p>来源可追溯，修正有说明，不确定处不猜测。</p></blockquote>
+    <h2>知识结构</h2>
+    <p>网站以“学科 → 课程 → 章节 → 概念”为主骨架，同时用标签把定义、定理、公式、推导和例题横向连接起来。</p>
+    <h2>更新方式</h2>
+    <p>每次加入或更换 PDF 后，运行本地登记脚本即可识别变化。内容经过整理和校对后，再生成并发布网站。</p>
+  </article>
+</BaseLayout>

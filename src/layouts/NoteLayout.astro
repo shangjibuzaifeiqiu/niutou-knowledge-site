@@ -1,0 +1,52 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+
+const {
+  frontmatter: {
+    title,
+    description,
+    subject,
+    course,
+    chapter,
+    source,
+    sourcePages,
+    updated,
+    status = "已整理",
+    tags = [],
+  },
+} = Astro.props;
+const updatedLabel = String(updated).slice(0, 10);
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="article-shell">
+    <aside class="article-aside">
+      <a class="back-link" href="/library">← 返回知识库</a>
+      <div class="source-card">
+        <span class="eyebrow">SOURCE TRACE</span>
+        <dl>
+          <div><dt>学科</dt><dd>{subject}</dd></div>
+          <div><dt>课程</dt><dd>{course}</dd></div>
+          <div><dt>章节</dt><dd>{chapter}</dd></div>
+          <div><dt>来源</dt><dd>{source}</dd></div>
+          <div><dt>页码</dt><dd>{sourcePages}</dd></div>
+          <div><dt>状态</dt><dd>{status}</dd></div>
+        </dl>
+      </div>
+    </aside>
+    <article class="prose">
+      <header class="article-header">
+        <div class="note-card__meta">
+          <span class="pill">{subject}</span>
+          <span>更新于 {updatedLabel}</span>
+        </div>
+        <h1>{title}</h1>
+        <p class="lead">{description}</p>
+        <div class="tag-row">
+          {tags.map((tag: string) => <span>#{tag}</span>)}
+        </div>
+      </header>
+      <slot />
+    </article>
+  </div>
+</BaseLayout>
