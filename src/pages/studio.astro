@@ -1,0 +1,254 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const modules = import.meta.glob("./notes/*.md", { eager: true });
+const notes = Object.entries(modules)
+  .map(([path, mod]: any) => ({ id: path.replace("./", "/").replace(/\.md$/, ""), href: path.replace("./", "/").replace(/\.md$/, ""), ...mod.frontmatter }))
+  .sort((a, b) => String(a.title).localeCompare(String(b.title), "zh-CN"));
+---
+
+<BaseLayout title="知识工作台" description="手动编辑知识点关系图和归档结构">
+  <section class="simple-hero studio-hero">
+    <span class="eyebrow">KNOWLEDGE STUDIO</span>
+    <h1>知识工作台</h1>
+    <p>在浏览器里拖动知识点、添加关系、导入导出 JSON。当前版本是静态网站，编辑结果先保存在本机。</p>
+  </section>
+
+  <section class="studio-layout">
+    <aside class="studio-panel">
+      <h2>关系编辑</h2>
+      <label>起点
+        <select id="edge-source"></select>
+      </label>
+      <label>关系
+        <input id="edge-label" value="关联" />
+      </label>
+      <label>终点
+        <select id="edge-target"></select>
+      </label>
+      <button class="button" type="button" id="add-edge">添加关系</button>
+      <button class="button button--ghost" type="button" id="export-graph">导出关系图</button>
+      <button class="button button--ghost" type="button" id="reset-graph">恢复默认</button>
+      <label>导入 JSON
+        <input id="import-graph" type="file" accept="application/json" />
+      </label>
+    </aside>
+
+    <div class="graph-workspace">
+      <div class="graph-toolbar">
+        <span>拖动节点调整布局，点击连线可删除。</span>
+      </div>
+      <svg id="knowledge-graph" class="knowledge-graph" role="img" aria-label="知识点关系图"></svg>
+    </div>
+
+    <aside class="studio-panel">
+      <h2>当前关系</h2>
+      <div id="edge-list" class="edge-list"></div>
+    </aside>
+  </section>
+
+  <script define:vars={{ notes }}>
+    const storageKey = "niutou.graph.v1";
+    const svg = document.querySelector("#knowledge-graph");
+    const sourceSelect = document.querySelector("#edge-source");
+    const targetSelect = document.querySelector("#edge-target");
+    const labelInput = document.querySelector("#edge-label");
+    const edgeList = document.querySelector("#edge-list");
+    const addEdgeButton = document.querySelector("#add-edge");
+    const exportButton = document.querySelector("#export-graph");
+    const resetButton = document.querySelector("#reset-graph");
+    const importInput = document.querySelector("#import-graph");
+    let draggingId = "";
+
+    const baseNodes = notes.map((note, index) => ({
+      id: note.id,
+      title: note.title,
+      subject: note.subject,
+      href: note.href,
+      x: 220 + (index % 5) * 190,
+      y: 140 + Math.floor(index / 5) * 135,
+    }));
+
+    const defaultEdges = [
+      ["em-coulomb-electric-field", "基础", "em-gauss-law"],
+      ["em-gauss-law", "扩展", "em-dielectric-displacement-energy"],
+      ["em-biot-savart-ampere", "介质中", "em-magnetic-media"],
+      ["em-electromagnetic-induction", "补全", "em-displacement-current-maxwell"],
+      ["em-displacement-current-maxwell", "推出", "em-electromagnetic-waves"],
+      ["mechanics-constraints-virtual-displacement", "进入", "mechanics-generalized-coordinates-virtual-work"],
+      ["mechanics-generalized-coordinates-virtual-work", "进入", "mechanics-dalembert-lagrange"],
+      ["math-multivariable-limits-differentiability", "工具", "math-composite-implicit-gradient"],
+      ["math-multiple-integrals", "进阶", "math-line-surface-integrals"],
+      ["math-infinite-series", "进阶", "math-function-series-power-series"],
+    ].map(([from, label, to]) => ({
+      from: `/notes/${from}`,
+      label,
+      to: `/notes/${to}`,
+    }));
+
+    const loadState = () => {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || "null");
+      } catch {
+        return null;
+      }
+    };
+
+    let state = loadState() || { version: 1, nodes: baseNodes, edges: defaultEdges };
+
+    const saveState = () => localStorage.setItem(storageKey, JSON.stringify(state, null, 2));
+    const nodeById = () => new Map(state.nodes.map((node) => [node.id, node]));
+
+    const populateSelects = () => {
+      [sourceSelect, targetSelect].forEach((select) => {
+        select.innerHTML = "";
+        baseNodes.forEach((node) => {
+          const option = document.createElement("option");
+          option.value = node.id;
+          option.textContent = node.title;
+          select.appendChild(option);
+        });
+      });
+    };
+
+    const subjectClass = (subject) => {
+      if (subject === "数学分析") return "math";
+      if (subject === "分析力学") return "mechanics";
+      return "em";
+    };
+
+    const render = () => {
+      if (!svg) return;
+      const nodes = nodeById();
+      svg.setAttribute("viewBox", "0 0 1160 760");
+      svg.innerHTML = "";
+
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      defs.innerHTML = `<marker id="arrow-head" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#6f8f86"></path></marker>`;
+      svg.appendChild(defs);
+
+      state.edges.forEach((edge, index) => {
+        const from = nodes.get(edge.from);
+        const to = nodes.get(edge.to);
+        if (!from || !to) return;
+        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        group.classList.add("graph-edge");
+        group.dataset.index = String(index);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", from.x);
+        line.setAttribute("y1", from.y);
+        line.setAttribute("x2", to.x);
+        line.setAttribute("y2", to.y);
+        line.setAttribute("marker-end", "url(#arrow-head)");
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", String((from.x + to.x) / 2));
+        text.setAttribute("y", String((from.y + to.y) / 2 - 8));
+        text.textContent = edge.label;
+        group.append(line, text);
+        group.addEventListener("click", () => {
+          state.edges.splice(index, 1);
+          saveState();
+          render();
+        });
+        svg.appendChild(group);
+      });
+
+      state.nodes.forEach((node) => {
+        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        group.classList.add("graph-node", subjectClass(node.subject));
+        group.dataset.id = node.id;
+        group.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", "-78");
+        rect.setAttribute("y", "-28");
+        rect.setAttribute("width", "156");
+        rect.setAttribute("height", "56");
+        rect.setAttribute("rx", "8");
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("dominant-baseline", "middle");
+        text.textContent = node.title.length > 12 ? `${node.title.slice(0, 12)}…` : node.title;
+        group.append(rect, text);
+        group.addEventListener("pointerdown", (event) => {
+          draggingId = node.id;
+          svg.setPointerCapture(event.pointerId);
+        });
+        group.addEventListener("dblclick", () => window.location.href = node.href);
+        svg.appendChild(group);
+      });
+
+      renderEdgeList();
+    };
+
+    const renderEdgeList = () => {
+      const nodes = nodeById();
+      edgeList.innerHTML = "";
+      state.edges.forEach((edge, index) => {
+        const row = document.createElement("button");
+        row.className = "edge-row";
+        row.type = "button";
+        row.textContent = `${nodes.get(edge.from)?.title || "未知"} ${edge.label} ${nodes.get(edge.to)?.title || "未知"}`;
+        row.addEventListener("click", () => {
+          state.edges.splice(index, 1);
+          saveState();
+          render();
+        });
+        edgeList.appendChild(row);
+      });
+    };
+
+    const downloadJson = () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "niutou-knowledge-graph.json";
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
+    populateSelects();
+    addEdgeButton?.addEventListener("click", () => {
+      if (sourceSelect.value === targetSelect.value) return;
+      state.edges.push({ from: sourceSelect.value, to: targetSelect.value, label: labelInput.value.trim() || "关联" });
+      saveState();
+      render();
+    });
+    exportButton?.addEventListener("click", downloadJson);
+    resetButton?.addEventListener("click", () => {
+      state = { version: 1, nodes: baseNodes, edges: defaultEdges };
+      saveState();
+      render();
+    });
+    importInput?.addEventListener("change", async () => {
+      const file = importInput.files?.[0];
+      if (!file) return;
+      state = JSON.parse(await file.text());
+      saveState();
+      render();
+    });
+    svg?.addEventListener("pointermove", (event) => {
+      if (!draggingId) return;
+      const node = state.nodes.find((item) => item.id === draggingId);
+      if (!node) return;
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const cursor = point.matrixTransform(svg.getScreenCTM().inverse());
+      node.x = Math.max(90, Math.min(1070, cursor.x));
+      node.y = Math.max(60, Math.min(700, cursor.y));
+      render();
+    });
+    svg?.addEventListener("pointerup", () => {
+      if (!draggingId) return;
+      draggingId = "";
+      saveState();
+    });
+    svg?.addEventListener("pointerleave", () => {
+      if (!draggingId) return;
+      draggingId = "";
+      saveState();
+    });
+    render();
+  </script>
+</BaseLayout>

@@ -13,6 +13,13 @@
 
 完整复用流程见 `docs/reusable-update-workflow.md`。最省额度的请求模板见 `templates/update-request.md`。
 
+## 知识管理
+
+- `/library/`：浏览、搜索知识点，也可以切换为层级视图并在本机编辑归档层级。
+- `/studio/`：拖拽编辑知识点关系图，添加或删除关系，导入导出 JSON。
+
+当前站点是完全静态部署，浏览器内编辑会先保存在本机 `localStorage`。需要长期固化时，导出 JSON 后交给 Codex 写回源码。
+
 ## 免费公开部署
 
 - GitHub：保存公开网站源码，不包含原始 PDF、临时文件或密钥。

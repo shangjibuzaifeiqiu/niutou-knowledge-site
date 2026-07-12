@@ -5,27 +5,166 @@ import NoteCard from "../components/NoteCard.astro";
 const modules = import.meta.glob("./notes/*.md", { eager: true });
 const notes = Object.entries(modules)
   .map(([path, mod]: any) => ({ href: path.replace("./", "/").replace(/\.md$/, ""), ...mod.frontmatter }))
-  .sort((a, b) => String(a.subject).localeCompare(String(b.subject), "zh-CN"));
+  .sort((a, b) =>
+    `${a.subject}-${a.course}-${a.chapter}-${a.title}`.localeCompare(
+      `${b.subject}-${b.course}-${b.chapter}-${b.title}`,
+      "zh-CN",
+    )
+  );
 ---
 
 <BaseLayout title="知识库" description="数学与物理手写笔记整理后的知识页面">
   <section class="library-hero">
     <span class="eyebrow">KNOWLEDGE LIBRARY</span>
     <h1>知识库</h1>
-    <p>搜索课程、概念、公式或标签。每篇内容都能回到对应的原笔记页。</p>
+    <p>搜索课程、概念、公式或标签。也可以在本机编辑知识点归档层级，再导出 JSON 让我写回网站。</p>
     <input id="search" class="search-box" type="search" placeholder="试试：虚位移、静电场、微分方程…" aria-label="搜索知识库" />
+    <div class="library-tools" aria-label="知识库视图控制">
+      <button class="chip-button is-active" type="button" data-view="cards">卡片</button>
+      <button class="chip-button" type="button" data-view="tree">层级</button>
+      <button class="chip-button" type="button" id="edit-taxonomy">编辑层级</button>
+      <a class="chip-button" href="/studio">关系图工作台</a>
+    </div>
   </section>
   <section class="note-grid" id="note-grid">
     {notes.map((note: any) => (
-      <div data-note data-search={`${note.title} ${note.subject} ${note.summary} ${(note.tags || []).join(" ")}`}>
+      <div data-note data-id={note.href} data-search={`${note.title} ${note.subject} ${note.course} ${note.chapter} ${note.summary} ${(note.tags || []).join(" ")}`}>
         <NoteCard {...note} />
       </div>
     ))}
   </section>
+  <section class="hierarchy-board" id="hierarchy-board" hidden></section>
+  <section class="taxonomy-editor" id="taxonomy-editor" hidden>
+    <div class="section-heading compact">
+      <div><span class="eyebrow">LOCAL ARCHIVE EDITOR</span><h2>编辑归档层级</h2></div>
+      <p>这些改动先保存在当前浏览器。导出 JSON 后，我可以把它固化进仓库。</p>
+    </div>
+    <div class="editor-actions">
+      <button class="button" type="button" id="save-taxonomy">保存本机层级</button>
+      <button class="button button--ghost" type="button" id="export-taxonomy">导出 JSON</button>
+      <button class="button button--ghost" type="button" id="reset-taxonomy">恢复默认</button>
+    </div>
+    <div class="taxonomy-list" id="taxonomy-list"></div>
+  </section>
   <div style="height: 80px"></div>
-  <script>
-    const input = document.querySelector<HTMLInputElement>("#search");
-    const cards = [...document.querySelectorAll<HTMLElement>("[data-note]")];
+  <script define:vars={{ notes }}>
+    const storageKey = "niutou.taxonomy.v1";
+    const input = document.querySelector("#search");
+    const cards = [...document.querySelectorAll("[data-note]")];
+    const noteGrid = document.querySelector("#note-grid");
+    const hierarchyBoard = document.querySelector("#hierarchy-board");
+    const taxonomyEditor = document.querySelector("#taxonomy-editor");
+    const taxonomyList = document.querySelector("#taxonomy-list");
+    const editButton = document.querySelector("#edit-taxonomy");
+    const saveButton = document.querySelector("#save-taxonomy");
+    const exportButton = document.querySelector("#export-taxonomy");
+    const resetButton = document.querySelector("#reset-taxonomy");
+    const viewButtons = [...document.querySelectorAll("[data-view]")];
+    const baseNotes = notes.map((note) => ({ ...note, id: note.href }));
+
+    const loadOverrides = () => {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || "{}");
+      } catch {
+        return {};
+      }
+    };
+
+    let overrides = loadOverrides();
+
+    const enrichedNotes = () => baseNotes.map((note) => ({ ...note, ...(overrides[note.id] || {}) }));
+
+    const groupNotes = (items) => {
+      const tree = new Map();
+      items.forEach((note) => {
+        if (!tree.has(note.subject)) tree.set(note.subject, new Map());
+        const subject = tree.get(note.subject);
+        const courseKey = note.course || "未归档课程";
+        if (!subject.has(courseKey)) subject.set(courseKey, new Map());
+        const course = subject.get(courseKey);
+        const chapterKey = note.chapter || "未归档章节";
+        if (!course.has(chapterKey)) course.set(chapterKey, []);
+        course.get(chapterKey).push(note);
+      });
+      return tree;
+    };
+
+    const renderHierarchy = () => {
+      if (!hierarchyBoard) return;
+      const tree = groupNotes(enrichedNotes());
+      hierarchyBoard.innerHTML = "";
+      tree.forEach((courses, subject) => {
+        const section = document.createElement("article");
+        section.className = "tree-subject";
+        section.innerHTML = `<h2>${subject}</h2>`;
+        courses.forEach((chapters, course) => {
+          const courseNode = document.createElement("details");
+          courseNode.open = true;
+          courseNode.innerHTML = `<summary>${course}</summary>`;
+          chapters.forEach((items, chapter) => {
+            const chapterNode = document.createElement("div");
+            chapterNode.className = "tree-chapter";
+            chapterNode.innerHTML = `<h3>${chapter}</h3>`;
+            const list = document.createElement("div");
+            list.className = "tree-note-list";
+            items.forEach((note) => {
+              const link = document.createElement("a");
+              link.href = note.href;
+              link.className = "tree-note";
+              link.textContent = note.title;
+              list.appendChild(link);
+            });
+            chapterNode.appendChild(list);
+            courseNode.appendChild(chapterNode);
+          });
+          section.appendChild(courseNode);
+        });
+        hierarchyBoard.appendChild(section);
+      });
+    };
+
+    const renderEditor = () => {
+      if (!taxonomyList) return;
+      taxonomyList.innerHTML = "";
+      enrichedNotes().forEach((note) => {
+        const row = document.createElement("article");
+        row.className = "taxonomy-row";
+        row.dataset.id = note.id;
+        row.innerHTML = `
+          <a href="${note.href}">${note.title}</a>
+          <label>学科<input name="subject" value="${note.subject || ""}" /></label>
+          <label>课程<input name="course" value="${note.course || ""}" /></label>
+          <label>章节<input name="chapter" value="${note.chapter || ""}" /></label>
+        `;
+        taxonomyList.appendChild(row);
+      });
+    };
+
+    const collectEditor = () => {
+      const next = {};
+      document.querySelectorAll(".taxonomy-row").forEach((row) => {
+        const id = row.dataset.id;
+        next[id] = {
+          subject: row.querySelector('[name="subject"]').value.trim(),
+          course: row.querySelector('[name="course"]').value.trim(),
+          chapter: row.querySelector('[name="chapter"]').value.trim(),
+        };
+      });
+      overrides = next;
+      localStorage.setItem(storageKey, JSON.stringify(overrides, null, 2));
+      renderHierarchy();
+    };
+
+    const downloadJson = (name, payload) => {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
     const params = new URLSearchParams(window.location.search);
     const initial = params.get("q") || "";
     if (input) input.value = initial;
@@ -36,6 +175,26 @@ const notes = Object.entries(modules)
       });
     };
     input?.addEventListener("input", filter);
+    viewButtons.forEach((button) => button.addEventListener("click", () => {
+      const mode = button.dataset.view;
+      viewButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+      noteGrid.hidden = mode !== "cards";
+      hierarchyBoard.hidden = mode !== "tree";
+      if (mode === "tree") renderHierarchy();
+    }));
+    editButton?.addEventListener("click", () => {
+      taxonomyEditor.hidden = !taxonomyEditor.hidden;
+      if (!taxonomyEditor.hidden) renderEditor();
+    });
+    saveButton?.addEventListener("click", collectEditor);
+    exportButton?.addEventListener("click", () => downloadJson("niutou-taxonomy.json", { version: 1, overrides }));
+    resetButton?.addEventListener("click", () => {
+      overrides = {};
+      localStorage.removeItem(storageKey);
+      renderEditor();
+      renderHierarchy();
+    });
+    renderHierarchy();
     filter();
   </script>
 </BaseLayout>
