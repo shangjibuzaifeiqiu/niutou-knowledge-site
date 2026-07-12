@@ -11,33 +11,36 @@ const notes = Object.entries(modules)
   .sort((a, b) => String(a.title).localeCompare(String(b.title), "zh-CN"));
 ---
 
-<BaseLayout title="知识工作台" description="可拖拽、可缩放、可编辑的个人知识关系图">
+<BaseLayout title="知识工作台" description="可整理层级、可生成地图、可全屏编辑的个人知识工作台">
   <section class="studio-intro">
     <div>
-      <span class="eyebrow">KNOWLEDGE STUDIO · 2.0</span>
-      <h1>把知识放到一张会生长的地图上</h1>
-      <p>查找知识点、梳理前后关系、调整学习路径。所有修改都会自动保存在当前浏览器。</p>
+      <span class="eyebrow">KNOWLEDGE STUDIO · 3.0</span>
+      <h1>把知识库整理成可以展开的地图</h1>
+      <p>左侧像文件夹一样整理知识点，中间编辑知识地图，右侧处理节点和关系。所有修改都会自动保存在当前浏览器。</p>
     </div>
     <div class="studio-metrics" aria-label="知识库统计">
-      <div><strong>{notes.length}</strong><span>知识点</span></div>
-      <div><strong>{new Set(notes.map((note: any) => note.subject)).size}</strong><span>学科</span></div>
+      <div><strong>{notes.length}</strong><span>原始知识点</span></div>
+      <div><strong id="folder-count">0</strong><span>文件夹</span></div>
       <div><strong id="relation-count">0</strong><span>关系</span></div>
     </div>
   </section>
 
-  <section class="studio-app" aria-label="知识关系图编辑器">
+  <section class="studio-app" id="studio-app" aria-label="知识关系图编辑器">
     <header class="studio-appbar">
       <div class="studio-appbar__brand">
         <span class="studio-live-dot"></span>
-        <strong>我的知识地图</strong>
+        <strong>牛头的脑袋 · 知识工作台</strong>
         <span id="save-state">已自动保存</span>
       </div>
       <div class="studio-appbar__actions">
         <button class="studio-tool" type="button" id="undo" title="撤销 (Ctrl+Z)" aria-label="撤销">↶</button>
         <button class="studio-tool" type="button" id="redo" title="重做 (Ctrl+Y)" aria-label="重做">↷</button>
         <span class="studio-divider"></span>
+        <button class="studio-action" type="button" id="add-node">＋ 节点</button>
+        <button class="studio-action" type="button" id="build-map">层级生成地图</button>
         <button class="studio-action" type="button" id="auto-layout">自动整理 <kbd>L</kbd></button>
-        <button class="studio-action" type="button" id="fit-view">适应画布 <kbd>F</kbd></button>
+        <button class="studio-action" type="button" id="fit-view">居中 <kbd>F</kbd></button>
+        <button class="studio-tool" type="button" id="toggle-fullscreen" title="全屏编辑" aria-label="全屏编辑">⛶</button>
         <button class="studio-tool" type="button" id="show-shortcuts" title="快捷键" aria-label="显示快捷键">?</button>
       </div>
     </header>
@@ -45,15 +48,21 @@ const notes = Object.entries(modules)
     <div class="studio-body">
       <aside class="studio-sidebar studio-library-panel">
         <div class="studio-panel-heading">
-          <div><span>知识库</span><small>点击定位到画布</small></div>
+          <div><span>知识库</span><small>文件夹式整理</small></div>
           <span id="visible-count" class="studio-count"></span>
         </div>
         <div class="studio-search-wrap">
           <span>⌕</span>
-          <input id="node-search" type="search" placeholder="搜索知识点、章节…" autocomplete="off" />
+          <input id="node-search" type="search" placeholder="搜索文件夹、知识点…" autocomplete="off" />
           <kbd>/</kbd>
         </div>
         <div id="subject-filters" class="studio-filter-row"></div>
+        <div class="folder-toolbar" aria-label="知识库层级工具">
+          <button type="button" id="add-folder" title="在当前层级新建文件夹">＋ 文件夹</button>
+          <button type="button" id="rename-folder" title="重命名当前文件夹">重命名</button>
+          <button type="button" id="delete-folder" title="删除当前文件夹">删除</button>
+        </div>
+        <div id="folder-path" class="folder-path"></div>
         <div id="node-library" class="studio-node-library"></div>
       </aside>
 
@@ -64,7 +73,7 @@ const notes = Object.entries(modules)
           <button class="canvas-mode" type="button" data-mode="pan" title="平移画布 (H)"><span>✥</span>平移</button>
         </div>
         <svg id="knowledge-graph" class="knowledge-graph" role="img" aria-label="可编辑知识关系图"></svg>
-        <div class="studio-canvas-hint" id="canvas-hint">拖动节点 · 滚轮缩放 · 双击打开笔记</div>
+        <div class="studio-canvas-hint" id="canvas-hint">点击目录节点查看子级 · 拖动节点 · 滚轮缩放</div>
         <div class="studio-zoom-controls" aria-label="缩放控制">
           <button type="button" id="zoom-out" aria-label="缩小">−</button>
           <span id="zoom-value">100%</span>
@@ -75,36 +84,56 @@ const notes = Object.entries(modules)
       <aside class="studio-sidebar studio-inspector">
         <div id="inspector-empty" class="inspector-empty">
           <span class="inspector-empty__icon">◎</span>
-          <h2>选择一个知识点</h2>
-          <p>查看它的归档信息和关系，或快速建立新的知识连接。</p>
+          <h2>选择节点或文件夹</h2>
+          <p>可编辑归档位置、建立关系，或把文件夹层级部署成知识地图。</p>
           <div class="inspector-tips">
             <span><kbd>V</kbd> 选择</span>
             <span><kbd>C</kbd> 连线</span>
-            <span><kbd>F</kbd> 适应画布</span>
+            <span><kbd>F</kbd> 居中</span>
           </div>
         </div>
 
         <div id="node-inspector" hidden>
           <div class="studio-panel-heading">
-            <div><span>知识点详情</span><small>当前选中</small></div>
+            <div><span id="inspector-panel-title">节点详情</span><small>当前选中</small></div>
             <button class="studio-tool studio-tool--small" id="clear-selection" type="button" aria-label="取消选择">×</button>
           </div>
           <div class="inspector-subject" id="inspector-subject"></div>
           <h2 id="inspector-title"></h2>
           <p id="inspector-summary" class="inspector-summary"></p>
-          <dl class="inspector-meta">
-            <div><dt>课程</dt><dd id="inspector-course"></dd></div>
-            <div><dt>章节</dt><dd id="inspector-chapter"></dd></div>
-          </dl>
           <a id="open-note" class="button inspector-open" href="/">打开完整笔记 <span>↗</span></a>
 
+          <div class="inspector-section" id="folder-children-section" hidden>
+            <div class="inspector-section__title"><strong>下一级</strong><span id="folder-child-count"></span></div>
+            <div id="folder-children" class="child-node-list"></div>
+          </div>
+
+          <div class="inspector-section" id="node-edit-section">
+            <div class="inspector-section__title"><strong>归档与内容</strong><span>本地编辑</span></div>
+            <label>标题
+              <input id="node-title-input" />
+            </label>
+            <label>学科
+              <input id="node-subject-input" list="subject-options" />
+              <datalist id="subject-options"></datalist>
+            </label>
+            <label>文件夹
+              <select id="node-folder-select"></select>
+            </label>
+            <label>摘要
+              <textarea id="node-summary-input" rows="4"></textarea>
+            </label>
+            <button class="button" type="button" id="save-node">保存节点</button>
+          </div>
+
           <div class="inspector-section">
-            <div class="inspector-section__title"><strong>添加关系</strong><span>从当前知识点出发</span></div>
+            <div class="inspector-section__title"><strong>添加关系</strong><span>从当前节点出发</span></div>
             <label>关系类型
               <input id="edge-label" value="关联" list="edge-label-options" />
               <datalist id="edge-label-options">
-                <option value="基础"></option><option value="推导"></option><option value="应用"></option>
-                <option value="对比"></option><option value="补充"></option><option value="关联"></option>
+                <option value="包含"></option><option value="基础"></option><option value="推导"></option>
+                <option value="应用"></option><option value="对比"></option><option value="补充"></option>
+                <option value="关联"></option>
               </datalist>
             </label>
             <label>连接到
@@ -136,7 +165,7 @@ const notes = Object.entries(modules)
 
         <div class="studio-data-actions">
           <strong>本地数据</strong>
-          <span>可导出备份，交给我即可写回网站源码。</span>
+          <span>导出的 JSON 包含文件夹、手动节点、坐标和关系，后续可写回源码。</span>
           <div>
             <button type="button" id="export-graph">导出 JSON</button>
             <label class="studio-file-button">导入 JSON<input id="import-graph" type="file" accept="application/json" /></label>
@@ -147,11 +176,33 @@ const notes = Object.entries(modules)
     </div>
   </section>
 
+  <dialog id="node-dialog" class="node-dialog">
+    <form method="dialog" id="node-form">
+      <div class="shortcut-dialog__header">
+        <div><span class="eyebrow">NEW NODE</span><h2>添加知识节点</h2></div>
+        <button value="cancel" type="submit" aria-label="关闭">×</button>
+      </div>
+      <div class="node-dialog__body">
+        <label>标题<input id="new-node-title" required placeholder="例如：物理、电磁学、规范坐标" /></label>
+        <label>类型
+          <select id="new-node-kind">
+            <option value="folder">目录节点</option>
+            <option value="manual">概念节点</option>
+          </select>
+        </label>
+        <label>学科<input id="new-node-subject" list="subject-options" placeholder="例如：物理" /></label>
+        <label>放入文件夹<select id="new-node-folder"></select></label>
+        <label>摘要<textarea id="new-node-summary" rows="4" placeholder="可留空，之后再补"></textarea></label>
+        <button class="button" value="default" type="submit">添加到知识库和地图</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="shortcut-dialog" class="shortcut-dialog">
     <div class="shortcut-dialog__header"><div><span class="eyebrow">SHORTCUTS</span><h2>键盘快捷键</h2></div><button id="close-shortcuts" type="button" aria-label="关闭">×</button></div>
     <div class="shortcut-grid">
       <span><kbd>V</kbd>选择工具</span><span><kbd>C</kbd>快速连线</span>
-      <span><kbd>H</kbd>平移画布</span><span><kbd>F</kbd>适应全部</span>
+      <span><kbd>H</kbd>平移画布</span><span><kbd>F</kbd>居中全部</span>
       <span><kbd>L</kbd>自动整理</span><span><kbd>/</kbd>搜索知识</span>
       <span><kbd>Ctrl Z</kbd>撤销</span><span><kbd>Ctrl Y</kbd>重做</span>
       <span><kbd>Delete</kbd>删除关系</span><span><kbd>Esc</kbd>取消操作</span>
@@ -160,32 +211,63 @@ const notes = Object.entries(modules)
   <div id="studio-toast" class="studio-toast" role="status" aria-live="polite"></div>
 
   <script define:vars={{ notes }}>
-    const storageKey = "niutou.graph.v1";
+    const storageKey = "niutou.graph.v3";
+    const legacyStorageKey = "niutou.graph.v1";
+    const app = document.querySelector("#studio-app");
     const svg = document.querySelector("#knowledge-graph");
     const nodeLibrary = document.querySelector("#node-library");
+    const folderPath = document.querySelector("#folder-path");
     const subjectFilters = document.querySelector("#subject-filters");
     const searchInput = document.querySelector("#node-search");
     const targetSelect = document.querySelector("#edge-target");
     const labelInput = document.querySelector("#edge-label");
     const edgeList = document.querySelector("#edge-list");
     const relationCount = document.querySelector("#relation-count");
+    const folderCount = document.querySelector("#folder-count");
     const visibleCount = document.querySelector("#visible-count");
     const zoomValue = document.querySelector("#zoom-value");
     const canvasHint = document.querySelector("#canvas-hint");
     const saveIndicator = document.querySelector("#save-state");
     const toast = document.querySelector("#studio-toast");
     const NS = "http://www.w3.org/2000/svg";
-    const NODE_W = 210;
-    const NODE_H = 78;
-    const subjects = [...new Set(notes.map((note) => note.subject))];
+    const NODE_W = 218;
+    const NODE_H = 82;
+    const ROOT_FOLDER = "root";
+    const subjects = [...new Set(notes.map((note) => note.subject).filter(Boolean))];
 
+    const slug = (value) => String(value || "untitled").trim().toLowerCase()
+      .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+      .replace(/^-+|-+$/g, "") || `item-${Math.random().toString(16).slice(2, 8)}`;
+    const uniqueId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 7)}`;
+    const clone = (value) => JSON.parse(JSON.stringify(value));
+
+    const defaultFolders = () => {
+      const folders = [{ id: ROOT_FOLDER, name: "知识库", parentId: "", open: true }];
+      const seen = new Set([ROOT_FOLDER]);
+      notes.forEach((note) => {
+        const subjectId = `subject-${slug(note.subject)}`;
+        const chapterId = `chapter-${slug(note.subject)}-${slug(note.chapter)}`;
+        if (!seen.has(subjectId)) {
+          seen.add(subjectId);
+          folders.push({ id: subjectId, name: note.subject || "未分类", parentId: ROOT_FOLDER, open: true });
+        }
+        if (!seen.has(chapterId)) {
+          seen.add(chapterId);
+          folders.push({ id: chapterId, name: note.chapter || "未命名章节", parentId: subjectId, open: true });
+        }
+      });
+      return folders;
+    };
+    const folderIdForNote = (note) => `chapter-${slug(note.subject)}-${slug(note.chapter)}`;
     const baseNodes = notes.map((note, index) => ({
       id: note.id,
+      kind: "note",
       title: note.title,
-      subject: note.subject,
-      course: note.course,
-      chapter: note.chapter,
-      summary: note.summary,
+      subject: note.subject || "未分类",
+      course: note.course || "",
+      chapter: note.chapter || "",
+      summary: note.summary || "",
+      folderId: folderIdForNote(note),
       href: note.href,
       x: 180 + (index % 5) * 280,
       y: 150 + Math.floor(index / 5) * 150,
@@ -204,29 +286,65 @@ const notes = Object.entries(modules)
       ["math-multivariable-limits-differentiability", "工具", "math-composite-implicit-gradient"],
       ["math-multiple-integrals", "进阶", "math-line-surface-integrals"],
       ["math-infinite-series", "进阶", "math-function-series-power-series"],
-    ].map(([from, label, to]) => ({ from: `/notes/${from}`, label, to: `/notes/${to}` }));
+    ].map(([from, label, to]) => ({ from: `/notes/${from}`, label, to: `/notes/${to}`, kind: "relation" }));
 
-    const clone = (value) => JSON.parse(JSON.stringify(value));
     const loadState = () => {
-      try { return JSON.parse(localStorage.getItem(storageKey) || "null"); }
+      try { return JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey) || "null"); }
       catch { return null; }
     };
+
     const normalizeState = (saved) => {
-      const savedPositions = new Map((saved?.nodes || []).map((node) => [node.id, node]));
-      const validIds = new Set(baseNodes.map((node) => node.id));
+      const folders = Array.isArray(saved?.folders) && saved.folders.length ? clone(saved.folders) : defaultFolders();
+      if (!folders.some((folder) => folder.id === ROOT_FOLDER)) folders.unshift({ id: ROOT_FOLDER, name: "知识库", parentId: "", open: true });
+      const folderIds = new Set(folders.map((folder) => folder.id));
+      const savedNodes = new Map((saved?.nodes || []).map((node) => [node.id, node]));
       const nodes = baseNodes.map((node) => {
-        const old = savedPositions.get(node.id);
-        return { ...node, x: Number(old?.x) || node.x, y: Number(old?.y) || node.y };
+        const old = savedNodes.get(node.id) || {};
+        const folderId = folderIds.has(old.folderId) ? old.folderId : node.folderId;
+        return {
+          ...node,
+          title: old.title || node.title,
+          subject: old.subject || node.subject,
+          chapter: old.chapter || node.chapter,
+          summary: old.summary || node.summary,
+          folderId,
+          x: Number(old.x) || node.x,
+          y: Number(old.y) || node.y,
+          hidden: Boolean(old.hidden),
+        };
       });
-      const edges = Array.isArray(saved?.edges)
-        ? saved.edges.filter((edge) => validIds.has(edge.from) && validIds.has(edge.to) && edge.from !== edge.to)
-        : clone(defaultEdges);
-      return { version: 2, nodes, edges };
+      (saved?.nodes || [])
+        .filter((node) => node.kind === "manual" || node.kind === "folder")
+        .forEach((node) => {
+          if (nodes.some((item) => item.id === node.id)) return;
+          nodes.push({
+            id: node.id,
+            kind: node.kind || "manual",
+            title: node.title || "未命名节点",
+            subject: node.subject || "自定义",
+            course: node.course || "",
+            chapter: node.chapter || "",
+            summary: node.summary || "",
+            folderId: folderIds.has(node.folderId) ? node.folderId : ROOT_FOLDER,
+            href: node.href || "",
+            x: Number(node.x) || 180,
+            y: Number(node.y) || 150,
+            hidden: Boolean(node.hidden),
+            collapsed: Boolean(node.collapsed),
+          });
+        });
+      const validIds = new Set(nodes.map((node) => node.id));
+      const sourceEdges = Array.isArray(saved?.edges) ? saved.edges : clone(defaultEdges);
+      const edges = sourceEdges
+        .filter((edge) => validIds.has(edge.from) && validIds.has(edge.to) && edge.from !== edge.to)
+        .map((edge) => ({ from: edge.from, to: edge.to, label: edge.label || "关联", kind: edge.kind || "relation" }));
+      return { version: 3, folders, nodes, edges };
     };
 
     let state = normalizeState(loadState());
     let selectedNodeId = "";
     let selectedEdgeIndex = -1;
+    let selectedFolderId = ROOT_FOLDER;
     let activeSubject = "全部";
     let mode = "select";
     let connectFrom = "";
@@ -238,6 +356,9 @@ const notes = Object.entries(modules)
     const future = [];
 
     const nodeMap = () => new Map(state.nodes.map((node) => [node.id, node]));
+    const folderMap = () => new Map(state.folders.map((folder) => [folder.id, folder]));
+    const childFolders = (id) => state.folders.filter((folder) => folder.parentId === id);
+    const childNodes = (id) => state.nodes.filter((node) => node.folderId === id && node.kind !== "folder");
     const snapshot = () => clone(state);
     const save = () => {
       localStorage.setItem(storageKey, JSON.stringify(state));
@@ -252,7 +373,7 @@ const notes = Object.entries(modules)
     };
     const commit = (mutate, message) => {
       history.push(snapshot());
-      if (history.length > 40) history.shift();
+      if (history.length > 50) history.shift();
       future.length = 0;
       mutate();
       save();
@@ -278,8 +399,8 @@ const notes = Object.entries(modules)
       announce("已重做");
     };
 
-    const subjectClass = (subject) => subject === "数学分析" ? "math" : subject === "分析力学" ? "mechanics" : "em";
-    const truncate = (text, length) => text.length > length ? `${text.slice(0, length)}…` : text;
+    const subjectClass = (subject) => subject === "数学分析" ? "math" : subject === "分析力学" ? "mechanics" : subject === "物理" ? "physics" : "em";
+    const truncate = (text = "", length = 15) => String(text).length > length ? `${String(text).slice(0, length)}…` : String(text);
     const svgElement = (name, attrs = {}) => {
       const element = document.createElementNS(NS, name);
       Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
@@ -290,9 +411,35 @@ const notes = Object.entries(modules)
       return { x: view.x + (clientX - rect.left) / rect.width * view.w, y: view.y + (clientY - rect.top) / rect.height * view.h };
     };
     const updateView = () => {
+      const rect = svg.getBoundingClientRect();
+      if (rect.width && rect.height) view.h = view.w * rect.height / rect.width;
       svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
       zoomValue.textContent = `${Math.round(160000 / view.w)}%`;
     };
+
+    const visibleGraphNodes = () => state.nodes.filter((node) => !node.hidden);
+    const visibleNodeIds = () => new Set(visibleGraphNodes().map((node) => node.id));
+    const selectOptions = () => state.nodes.filter((node) => node.id !== selectedNodeId && !node.hidden);
+
+    const folderAncestors = (id) => {
+      const folders = folderMap();
+      const list = [];
+      let current = folders.get(id);
+      while (current) {
+        list.unshift(current);
+        current = folders.get(current.parentId);
+      }
+      return list;
+    };
+    const descendantFolderIds = (id) => {
+      const result = [];
+      childFolders(id).forEach((folder) => {
+        result.push(folder.id);
+        result.push(...descendantFolderIds(folder.id));
+      });
+      return result;
+    };
+    const folderNodeId = (folderId) => `folder:${folderId}`;
 
     const renderFilters = () => {
       subjectFilters.innerHTML = "";
@@ -304,42 +451,94 @@ const notes = Object.entries(modules)
         button.addEventListener("click", () => { activeSubject = subject; renderFilters(); renderLibrary(); });
         subjectFilters.appendChild(button);
       });
-    };
-
-    const filteredNodes = () => {
-      const query = searchInput.value.trim().toLowerCase();
-      return state.nodes.filter((node) => (activeSubject === "全部" || node.subject === activeSubject) &&
-        (!query || `${node.title} ${node.subject} ${node.course} ${node.chapter}`.toLowerCase().includes(query)));
-    };
-
-    const renderLibrary = () => {
-      const result = filteredNodes();
-      nodeLibrary.innerHTML = "";
-      visibleCount.textContent = `${result.length}/${state.nodes.length}`;
-      if (!result.length) {
-        nodeLibrary.innerHTML = `<div class="studio-no-results">没有匹配的知识点</div>`;
-        return;
-      }
-      const grouped = new Map();
-      result.forEach((node) => {
-        const key = node.chapter || node.subject;
-        if (!grouped.has(key)) grouped.set(key, []);
-        grouped.get(key).push(node);
+      const subjectOptions = document.querySelector("#subject-options");
+      subjectOptions.innerHTML = "";
+      [...new Set([...subjects, ...state.nodes.map((node) => node.subject).filter(Boolean)])].forEach((subject) => {
+        const option = document.createElement("option");
+        option.value = subject;
+        subjectOptions.appendChild(option);
       });
-      grouped.forEach((items, chapter) => {
-        const section = document.createElement("section");
-        section.className = "library-group";
-        section.innerHTML = `<h3>${chapter}<span>${items.length}</span></h3>`;
-        items.forEach((node) => {
+    };
+
+    const matchesQuery = (nodeOrFolder) => {
+      const query = searchInput.value.trim().toLowerCase();
+      if (!query) return true;
+      return `${nodeOrFolder.title || ""} ${nodeOrFolder.name || ""} ${nodeOrFolder.subject || ""} ${nodeOrFolder.chapter || ""}`.toLowerCase().includes(query);
+    };
+    const subjectAllowed = (node) => activeSubject === "全部" || node.subject === activeSubject;
+
+    const renderFolderTree = (folderId, depth = 0) => {
+      const folders = folderMap();
+      const folder = folders.get(folderId);
+      if (!folder) return document.createDocumentFragment();
+      const fragment = document.createDocumentFragment();
+      const nestedFolders = childFolders(folderId);
+      const nestedNodes = childNodes(folderId).filter((node) => subjectAllowed(node));
+      const query = searchInput.value.trim();
+      const visibleFolders = nestedFolders.filter((item) => !query || matchesQuery(item) || descendantFolderIds(item.id).some((childId) => childNodes(childId).some(matchesQuery)));
+      const visibleNodes = nestedNodes.filter(matchesQuery);
+
+      if (folderId !== ROOT_FOLDER) {
+        const row = document.createElement("div");
+        row.className = `folder-row ${selectedFolderId === folder.id ? "is-selected" : ""}`;
+        row.style.setProperty("--depth", String(depth));
+        row.innerHTML = `<button type="button" class="folder-toggle">${folder.open ? "▾" : "▸"}</button><button type="button" class="folder-name"><span>▣</span><strong>${folder.name}</strong><small>${childFolders(folder.id).length + childNodes(folder.id).length}</small></button>`;
+        row.querySelector(".folder-toggle").addEventListener("click", (event) => {
+          event.stopPropagation();
+          commit(() => { folder.open = !folder.open; }, folder.open ? "已折叠文件夹" : "已展开文件夹");
+        });
+        row.querySelector(".folder-name").addEventListener("click", () => {
+          selectedFolderId = folder.id;
+          const graphNode = state.nodes.find((node) => node.id === folderNodeId(folder.id));
+          selectedNodeId = graphNode?.id || "";
+          selectedEdgeIndex = -1;
+          if (graphNode) centerNode(graphNode.id);
+          renderAll();
+        });
+        fragment.appendChild(row);
+      }
+
+      if (folderId === ROOT_FOLDER || folder.open || query) {
+        visibleFolders.forEach((item) => fragment.appendChild(renderFolderTree(item.id, depth + 1)));
+        visibleNodes.forEach((node) => {
           const button = document.createElement("button");
           button.type = "button";
           button.className = `library-node ${selectedNodeId === node.id ? "is-selected" : ""}`;
-          button.innerHTML = `<i class="${subjectClass(node.subject)}"></i><span><strong>${node.title}</strong><small>${node.subject}</small></span>`;
+          button.style.setProperty("--depth", String(depth + 1));
+          button.innerHTML = `<i class="${subjectClass(node.subject)}"></i><span><strong>${node.title}</strong><small>${node.kind === "manual" ? "手动节点" : node.subject}</small></span>`;
           button.addEventListener("click", () => { selectNode(node.id); centerNode(node.id); });
-          section.appendChild(button);
+          fragment.appendChild(button);
         });
-        nodeLibrary.appendChild(section);
-      });
+      }
+      return fragment;
+    };
+
+    const renderLibrary = () => {
+      nodeLibrary.innerHTML = "";
+      nodeLibrary.appendChild(renderFolderTree(ROOT_FOLDER, -1));
+      const visibleRows = nodeLibrary.querySelectorAll(".library-node").length;
+      visibleCount.textContent = `${visibleRows}/${state.nodes.filter((node) => node.kind !== "folder").length}`;
+      if (!nodeLibrary.children.length || !visibleRows && searchInput.value.trim()) {
+        nodeLibrary.innerHTML = `<div class="studio-no-results">没有匹配的知识点</div>`;
+      }
+      const path = folderAncestors(selectedFolderId).map((folder) => folder.name).join(" / ");
+      folderPath.textContent = path || "知识库";
+      folderCount.textContent = String(Math.max(0, state.folders.length - 1));
+    };
+
+    const renderFolderSelect = (select, currentValue = selectedFolderId) => {
+      select.innerHTML = "";
+      const addOption = (folderId, depth = 0) => {
+        const folder = folderMap().get(folderId);
+        if (!folder) return;
+        const option = document.createElement("option");
+        option.value = folder.id;
+        option.textContent = `${"　".repeat(depth)}${folder.name}`;
+        select.appendChild(option);
+        childFolders(folderId).forEach((child) => addOption(child.id, depth + 1));
+      };
+      addOption(ROOT_FOLDER, 0);
+      select.value = currentValue;
     };
 
     const edgePath = (from, to) => {
@@ -359,23 +558,25 @@ const notes = Object.entries(modules)
 
     const renderGraph = () => {
       const nodes = nodeMap();
+      const visible = visibleNodeIds();
       svg.innerHTML = "";
       const defs = svgElement("defs");
       defs.innerHTML = `<pattern id="dot-grid" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.5" fill="#b7ccc3" opacity=".5"/></pattern><marker id="arrow-head" markerWidth="10" markerHeight="10" refX="8.2" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#819d93"/></marker>`;
       svg.appendChild(defs);
-      const backdrop = svgElement("rect", { x: -5000, y: -5000, width: 10000, height: 10000, fill: "url(#dot-grid)", class: "graph-backdrop" });
-      svg.appendChild(backdrop);
+      svg.appendChild(svgElement("rect", { x: -5000, y: -5000, width: 10000, height: 10000, fill: "url(#dot-grid)", class: "graph-backdrop" }));
 
       state.edges.forEach((edge, index) => {
         const from = nodes.get(edge.from);
         const to = nodes.get(edge.to);
-        if (!from || !to) return;
-        const group = svgElement("g", { class: `graph-edge ${selectedEdgeIndex === index ? "is-selected" : ""}` });
-        const hit = svgElement("path", { d: edgePath(from, to), class: "graph-edge__hit" });
-        const path = svgElement("path", { d: edgePath(from, to), class: "graph-edge__line", "marker-end": "url(#arrow-head)" });
+        if (!from || !to || !visible.has(from.id) || !visible.has(to.id)) return;
+        const group = svgElement("g", { class: `graph-edge ${selectedEdgeIndex === index ? "is-selected" : ""} ${edge.kind === "hierarchy" ? "is-hierarchy" : ""}` });
+        const d = edgePath(from, to);
+        const hit = svgElement("path", { d, class: "graph-edge__hit" });
+        const path = svgElement("path", { d, class: "graph-edge__line", "marker-end": "url(#arrow-head)" });
         const midX = (from.x + to.x) / 2;
         const midY = (from.y + to.y) / 2;
-        const labelBg = svgElement("rect", { x: midX - Math.max(25, edge.label.length * 7), y: midY - 14, width: Math.max(50, edge.label.length * 14), height: 27, rx: 13.5, class: "graph-edge__label-bg" });
+        const labelWidth = Math.max(50, String(edge.label).length * 14);
+        const labelBg = svgElement("rect", { x: midX - labelWidth / 2, y: midY - 14, width: labelWidth, height: 27, rx: 13.5, class: "graph-edge__label-bg" });
         const text = svgElement("text", { x: midX, y: midY + 4, "text-anchor": "middle", class: "graph-edge__label" });
         text.textContent = edge.label;
         group.append(hit, path, labelBg, text);
@@ -383,24 +584,31 @@ const notes = Object.entries(modules)
         svg.appendChild(group);
       });
 
-      state.nodes.forEach((node) => {
+      visibleGraphNodes().forEach((node) => {
         const selected = selectedNodeId === node.id;
         const connecting = connectFrom === node.id;
-        const group = svgElement("g", { class: `graph-node ${subjectClass(node.subject)} ${selected ? "is-selected" : ""} ${connecting ? "is-connecting" : ""}`, transform: `translate(${node.x}, ${node.y})`, tabindex: 0, role: "button", "aria-label": node.title });
-        const rect = svgElement("rect", { x: -NODE_W / 2, y: -NODE_H / 2, width: NODE_W, height: NODE_H, rx: 15 });
+        const group = svgElement("g", { class: `graph-node ${subjectClass(node.subject)} kind-${node.kind} ${selected ? "is-selected" : ""} ${connecting ? "is-connecting" : ""}`, transform: `translate(${node.x}, ${node.y})`, tabindex: 0, role: "button", "aria-label": node.title });
+        const rect = svgElement("rect", { x: -NODE_W / 2, y: -NODE_H / 2, width: NODE_W, height: NODE_H, rx: node.kind === "folder" ? 10 : 15 });
         const accent = svgElement("rect", { x: -NODE_W / 2, y: -NODE_H / 2, width: 6, height: NODE_H, rx: 3, class: "graph-node__accent" });
-        const subjectText = svgElement("text", { x: -88, y: -13, class: "graph-node__subject" });
-        subjectText.textContent = `${node.subject} · ${truncate(node.chapter, 8)}`;
-        const title = svgElement("text", { x: -88, y: 14, class: "graph-node__title" });
+        const subjectText = svgElement("text", { x: -90, y: -14, class: "graph-node__subject" });
+        subjectText.textContent = node.kind === "folder" ? "目录节点" : `${node.subject} · ${truncate(node.chapter || "知识点", 8)}`;
+        const title = svgElement("text", { x: -90, y: 14, class: "graph-node__title" });
         title.textContent = truncate(node.title, 15);
         const anchor = svgElement("circle", { cx: NODE_W / 2, cy: 0, r: 5, class: "graph-node__anchor" });
         group.append(rect, accent, subjectText, title, anchor);
         group.addEventListener("pointerdown", (event) => onNodePointerDown(event, node));
-        group.addEventListener("dblclick", (event) => { event.stopPropagation(); window.location.href = node.href; });
+        group.addEventListener("dblclick", (event) => { event.stopPropagation(); openOrToggleNode(node); });
         group.addEventListener("keydown", (event) => { if (event.key === "Enter") selectNode(node.id); });
         svg.appendChild(group);
       });
       updateView();
+    };
+
+    const childrenForFolderNode = (node) => {
+      if (node.kind !== "folder") return [];
+      const folderId = node.id.replace("folder:", "");
+      const ids = new Set([folderNodeId(folderId), ...childFolders(folderId).map((folder) => folderNodeId(folder.id)), ...childNodes(folderId).map((item) => item.id)]);
+      return state.nodes.filter((item) => ids.has(item.id) && item.id !== node.id);
     };
 
     const renderInspector = () => {
@@ -415,18 +623,40 @@ const notes = Object.entries(modules)
       if (selectedNodeId) {
         const node = nodes.get(selectedNodeId);
         if (!node) return;
-        document.querySelector("#inspector-subject").textContent = node.subject;
+        document.querySelector("#inspector-panel-title").textContent = node.kind === "folder" ? "目录节点" : "节点详情";
+        document.querySelector("#inspector-subject").textContent = node.kind === "folder" ? "文件夹" : node.subject;
         document.querySelector("#inspector-subject").className = `inspector-subject ${subjectClass(node.subject)}`;
         document.querySelector("#inspector-title").textContent = node.title;
         document.querySelector("#inspector-summary").textContent = node.summary || "暂无摘要";
-        document.querySelector("#inspector-course").textContent = node.course || "—";
-        document.querySelector("#inspector-chapter").textContent = node.chapter || "—";
-        document.querySelector("#open-note").href = node.href;
+        const openNote = document.querySelector("#open-note");
+        openNote.hidden = !node.href;
+        openNote.href = node.href || "/";
+
+        document.querySelector("#node-title-input").value = node.title || "";
+        document.querySelector("#node-subject-input").value = node.subject || "";
+        document.querySelector("#node-summary-input").value = node.summary || "";
+        renderFolderSelect(document.querySelector("#node-folder-select"), node.folderId || ROOT_FOLDER);
+
+        const children = childrenForFolderNode(node);
+        const childSection = document.querySelector("#folder-children-section");
+        const childList = document.querySelector("#folder-children");
+        childSection.hidden = node.kind !== "folder";
+        childList.innerHTML = "";
+        document.querySelector("#folder-child-count").textContent = `${children.length} 个`;
+        children.forEach((child) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "child-node-row";
+          button.innerHTML = `<span>${child.kind === "folder" ? "▣" : "•"}</span><strong>${child.title}</strong>`;
+          button.addEventListener("click", () => { selectNode(child.id); centerNode(child.id); });
+          childList.appendChild(button);
+        });
+
         targetSelect.innerHTML = "";
-        state.nodes.filter((item) => item.id !== node.id).forEach((item) => {
+        selectOptions().forEach((item) => {
           const option = document.createElement("option");
           option.value = item.id;
-          option.textContent = `${item.title} · ${item.subject}`;
+          option.textContent = `${item.title} · ${item.kind === "folder" ? "目录" : item.subject}`;
           targetSelect.appendChild(option);
         });
         const related = state.edges.map((edge, index) => ({ edge, index })).filter(({ edge }) => edge.from === node.id || edge.to === node.id);
@@ -439,7 +669,7 @@ const notes = Object.entries(modules)
           const row = document.createElement("button");
           row.className = "edge-row";
           row.type = "button";
-          row.innerHTML = `<span>${outgoing ? "→" : "←"}</span><span><strong>${edge.label}</strong><small>${other?.title || "未知知识点"}</small></span>`;
+          row.innerHTML = `<span>${outgoing ? "→" : "←"}</span><span><strong>${edge.label}</strong><small>${other?.title || "未知节点"}</small></span>`;
           row.addEventListener("click", () => { selectedNodeId = ""; selectedEdgeIndex = index; renderAll(); });
           edgeList.appendChild(row);
         });
@@ -456,6 +686,7 @@ const notes = Object.entries(modules)
     };
 
     const renderAll = () => {
+      renderFilters();
       renderGraph();
       renderLibrary();
       renderInspector();
@@ -468,7 +699,7 @@ const notes = Object.entries(modules)
         if (!connectFrom) {
           connectFrom = id;
           selectedNodeId = id;
-          canvasHint.textContent = "再点击一个知识点，即可建立连接";
+          canvasHint.textContent = "再点击一个节点，即可建立连接";
           renderAll();
           return;
         }
@@ -476,24 +707,46 @@ const notes = Object.entries(modules)
           const from = connectFrom;
           connectFrom = "";
           if (state.edges.some((edge) => edge.from === from && edge.to === id)) {
-            announce("这两个知识点已经有连接了");
+            announce("这两个节点已经有连接了");
             setMode("select");
             return;
           }
-          commit(() => state.edges.push({ from, to: id, label: "关联" }), "已建立连接");
+          commit(() => state.edges.push({ from, to: id, label: "关联", kind: "relation" }), "已建立连接");
           setMode("select");
         }
         return;
       }
       selectedNodeId = id;
       selectedEdgeIndex = -1;
+      const selected = nodeMap().get(id);
+      if (selected?.kind === "folder") selectedFolderId = selected.id.replace("folder:", "");
+      else if (selected?.folderId) selectedFolderId = selected.folderId;
       renderAll();
+    };
+
+    const openOrToggleNode = (node) => {
+      if (node.href) {
+        window.location.href = node.href;
+        return;
+      }
+    };
+
+    const toggleFolderNode = (id) => {
+      const node = nodeMap().get(id);
+      if (!node || node.kind !== "folder") return;
+      const folderId = id.replace("folder:", "");
+      const childIds = new Set([...childFolders(folderId).map((folder) => folderNodeId(folder.id)), ...childNodes(folderId).map((item) => item.id)]);
+      commit(() => {
+        const nextHidden = !state.nodes.some((item) => childIds.has(item.id) && item.hidden);
+        state.nodes.forEach((item) => { if (childIds.has(item.id)) item.hidden = nextHidden; });
+        node.collapsed = nextHidden;
+      }, node.collapsed ? "已展开下一级" : "已折叠下一级");
     };
 
     const onNodePointerDown = (event, node) => {
       event.stopPropagation();
       if (event.detail === 2) {
-        window.location.href = node.href;
+        openOrToggleNode(node);
         return;
       }
       if (mode === "connect") return selectNode(node.id);
@@ -511,7 +764,7 @@ const notes = Object.entries(modules)
       if (next !== "connect") connectFrom = "";
       document.querySelectorAll(".canvas-mode").forEach((button) => button.classList.toggle("is-active", button.dataset.mode === next));
       svg.dataset.mode = next;
-      canvasHint.textContent = next === "connect" ? "依次点击两个知识点建立连接" : next === "pan" ? "拖动画布查看其他区域" : "拖动节点 · 滚轮缩放 · 双击打开笔记";
+      canvasHint.textContent = next === "connect" ? "依次点击两个节点建立连接" : next === "pan" ? "拖动画布查看其他区域" : "点击目录节点查看子级 · 拖动节点 · 滚轮缩放";
       renderGraph();
     };
 
@@ -528,7 +781,7 @@ const notes = Object.entries(modules)
       const cx = clientX ?? rect.left + rect.width / 2;
       const cy = clientY ?? rect.top + rect.height / 2;
       const before = screenToWorld(cx, cy);
-      const nextW = Math.max(620, Math.min(3200, view.w * factor));
+      const nextW = Math.max(620, Math.min(3600, view.w * factor));
       const nextH = nextW * rect.height / rect.width;
       const rx = (cx - rect.left) / rect.width;
       const ry = (cy - rect.top) / rect.height;
@@ -536,44 +789,244 @@ const notes = Object.entries(modules)
       updateView();
     };
 
-    const fitView = () => {
-      if (!state.nodes.length) return;
-      const xs = state.nodes.map((node) => node.x);
-      const ys = state.nodes.map((node) => node.y);
-      const minX = Math.min(...xs) - 170;
-      const maxX = Math.max(...xs) + 170;
-      const minY = Math.min(...ys) - 120;
-      const maxY = Math.max(...ys) + 120;
+    const fitView = (silent = false) => {
+      const graphNodes = visibleGraphNodes();
+      if (!graphNodes.length) return;
+      const xs = graphNodes.map((node) => node.x);
+      const ys = graphNodes.map((node) => node.y);
+      const minX = Math.min(...xs) - 190;
+      const maxX = Math.max(...xs) + 190;
+      const minY = Math.min(...ys) - 130;
+      const maxY = Math.max(...ys) + 130;
       const rect = svg.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
       const dataW = maxX - minX;
       const dataH = maxY - minY;
-      const width = Math.max(dataW, dataH * rect.width / rect.height, 700);
+      const width = Math.max(dataW, dataH * rect.width / rect.height, 760);
       view = { x: (minX + maxX - width) / 2, y: (minY + maxY - width * rect.height / rect.width) / 2, w: width, h: width * rect.height / rect.width };
       updateView();
-      announce("已显示全部知识点");
+      if (!silent) announce("已居中显示知识地图");
     };
 
     const autoLayout = () => {
       commit(() => {
-        const columns = subjects.map((subject) => state.nodes.filter((node) => node.subject === subject));
-        columns.forEach((items, column) => {
-          const byChapter = new Map();
-          items.forEach((node) => {
-            if (!byChapter.has(node.chapter)) byChapter.set(node.chapter, []);
-            byChapter.get(node.chapter).push(node);
-          });
-          let row = 0;
-          byChapter.forEach((chapterNodes) => {
-            chapterNodes.forEach((node) => {
-              node.x = 220 + column * 480 + (row % 2) * 230;
-              node.y = 130 + Math.floor(row / 2) * 130;
-              row += 1;
-            });
-            row += row % 2;
+        const graphNodes = visibleGraphNodes();
+        const groups = new Map();
+        graphNodes.forEach((node) => {
+          const key = node.kind === "folder" ? "目录" : node.subject;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(node);
+        });
+        [...groups.values()].forEach((items, column) => {
+          items.forEach((node, row) => {
+            node.x = 180 + column * 430 + (row % 2) * 160;
+            node.y = 140 + Math.floor(row / 2) * 140;
           });
         });
-      }, "已按学科与章节自动整理");
-      window.setTimeout(fitView, 40);
+      }, "已自动整理当前可见地图");
+      window.setTimeout(() => fitView(true), 40);
+    };
+
+    const buildMapFromHierarchy = () => {
+      const rootFolderId = selectedFolderId || ROOT_FOLDER;
+      commit(() => {
+        const existing = nodeMap();
+        const nextNodes = state.nodes.filter((node) => node.kind !== "folder");
+        const subtreeFolders = rootFolderId === ROOT_FOLDER
+          ? state.folders.filter((folder) => folder.id !== ROOT_FOLDER)
+          : [folderMap().get(rootFolderId), ...descendantFolderIds(rootFolderId).map((id) => folderMap().get(id))].filter(Boolean);
+        const subtreeFolderIds = new Set(subtreeFolders.map((folder) => folder.id));
+        const folderLevels = new Map([[rootFolderId, 0]]);
+        const assignLevels = (id, level = 0) => {
+          childFolders(id).forEach((folder) => {
+            if (!subtreeFolderIds.has(folder.id)) return;
+            folderLevels.set(folder.id, level + 1);
+            assignLevels(folder.id, level + 1);
+          });
+        };
+        assignLevels(rootFolderId);
+        const levelRows = new Map();
+        subtreeFolders.forEach((folder) => {
+          const level = folderLevels.get(folder.id) || 1;
+          const row = levelRows.get(level) || 0;
+          levelRows.set(level, row + 1);
+          const old = existing.get(folderNodeId(folder.id));
+          nextNodes.push({
+            id: folderNodeId(folder.id),
+            kind: "folder",
+            title: folder.name,
+            subject: folderAncestors(folder.id)[1]?.name || "目录",
+            course: "",
+            chapter: "知识库层级",
+            summary: "由左侧知识库文件夹生成的目录节点。单击可折叠或展开下一级。",
+            folderId: folder.id,
+            href: "",
+            x: old?.x || 150 + level * 360,
+            y: old?.y || 130 + row * 130,
+            hidden: false,
+            collapsed: false,
+          });
+        });
+        const rowsByFolder = new Map();
+        nextNodes.filter((node) => node.kind !== "folder").forEach((node) => {
+          const inScope = node.folderId === rootFolderId || subtreeFolderIds.has(node.folderId);
+          node.hidden = !inScope;
+          if (!inScope) return;
+          const folderLevel = folderLevels.get(node.folderId) || 1;
+          const row = rowsByFolder.get(node.folderId) || 0;
+          rowsByFolder.set(node.folderId, row + 1);
+          node.x = 150 + (folderLevel + 1) * 360;
+          node.y = 130 + row * 128 + (folderLevel % 2) * 44;
+          node.hidden = false;
+        });
+        state.nodes = nextNodes;
+        const hierarchyEdges = [];
+        subtreeFolders.forEach((folder) => {
+          if (folder.parentId && subtreeFolderIds.has(folder.parentId)) {
+            hierarchyEdges.push({ from: folderNodeId(folder.parentId), to: folderNodeId(folder.id), label: "包含", kind: "hierarchy" });
+          }
+          childNodes(folder.id).forEach((node) => {
+            hierarchyEdges.push({ from: folderNodeId(folder.id), to: node.id, label: "包含", kind: "hierarchy" });
+          });
+        });
+        const nonHierarchy = state.edges.filter((edge) => edge.kind !== "hierarchy");
+        const seen = new Set();
+        state.edges = [...hierarchyEdges, ...nonHierarchy].filter((edge) => {
+          const key = `${edge.from}->${edge.to}->${edge.label}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return state.nodes.some((node) => node.id === edge.from) && state.nodes.some((node) => node.id === edge.to);
+        });
+        selectedNodeId = rootFolderId === ROOT_FOLDER ? "" : folderNodeId(rootFolderId);
+        selectedEdgeIndex = -1;
+      }, "已按选中文件夹生成地图");
+      window.setTimeout(() => fitView(true), 60);
+    };
+
+    const addFolder = () => {
+      const name = window.prompt("新文件夹名称", "新文件夹");
+      if (!name?.trim()) return;
+      const parentId = selectedFolderId || ROOT_FOLDER;
+      commit(() => {
+        state.folders.push({ id: uniqueId("folder"), name: name.trim(), parentId, open: true });
+        const parent = folderMap().get(parentId);
+        if (parent) parent.open = true;
+      }, "已新建文件夹");
+    };
+    const renameFolder = () => {
+      if (selectedFolderId === ROOT_FOLDER) return announce("根目录不能重命名");
+      const folder = folderMap().get(selectedFolderId);
+      if (!folder) return;
+      const name = window.prompt("新的文件夹名称", folder.name);
+      if (!name?.trim()) return;
+      commit(() => {
+        folder.name = name.trim();
+        const graphNode = state.nodes.find((node) => node.id === folderNodeId(folder.id));
+        if (graphNode) graphNode.title = folder.name;
+      }, "已重命名文件夹");
+    };
+    const deleteFolder = () => {
+      if (selectedFolderId === ROOT_FOLDER) return announce("根目录不能删除");
+      const folder = folderMap().get(selectedFolderId);
+      if (!folder) return;
+      if (!window.confirm(`删除“${folder.name}”？其中内容会移动到上一级。`)) return;
+      commit(() => {
+        const parentId = folder.parentId || ROOT_FOLDER;
+        childFolders(folder.id).forEach((child) => { child.parentId = parentId; });
+        childNodes(folder.id).forEach((node) => { node.folderId = parentId; });
+        state.folders = state.folders.filter((item) => item.id !== folder.id);
+        state.nodes = state.nodes.filter((node) => node.id !== folderNodeId(folder.id));
+        state.edges = state.edges.filter((edge) => edge.from !== folderNodeId(folder.id) && edge.to !== folderNodeId(folder.id));
+        selectedFolderId = parentId;
+        selectedNodeId = "";
+      }, "已删除文件夹");
+    };
+
+    const saveSelectedNode = () => {
+      const node = nodeMap().get(selectedNodeId);
+      if (!node) return;
+      const title = document.querySelector("#node-title-input").value.trim();
+      const subject = document.querySelector("#node-subject-input").value.trim();
+      const summary = document.querySelector("#node-summary-input").value.trim();
+      const folderId = document.querySelector("#node-folder-select").value || ROOT_FOLDER;
+      if (!title) return announce("标题不能为空");
+      commit(() => {
+        node.title = title;
+        node.subject = subject || node.subject || "自定义";
+        node.summary = summary;
+        node.folderId = folderId;
+        if (node.kind === "folder" && node.id.startsWith("folder:")) {
+          const folder = folderMap().get(node.id.replace("folder:", ""));
+          if (folder) folder.name = title;
+        }
+        selectedFolderId = folderId;
+      }, "节点已保存");
+    };
+
+    const openNodeDialog = () => {
+      const dialog = document.querySelector("#node-dialog");
+      document.querySelector("#new-node-title").value = "";
+      document.querySelector("#new-node-kind").value = "folder";
+      document.querySelector("#new-node-subject").value = activeSubject === "全部" ? "" : activeSubject;
+      document.querySelector("#new-node-summary").value = "";
+      renderFolderSelect(document.querySelector("#new-node-folder"), selectedFolderId);
+      dialog.showModal();
+    };
+    const createManualNode = () => {
+      const title = document.querySelector("#new-node-title").value.trim();
+      if (!title) return;
+      const kind = document.querySelector("#new-node-kind").value;
+      const subject = document.querySelector("#new-node-subject").value.trim() || activeSubject !== "全部" && activeSubject || "自定义";
+      const folderId = document.querySelector("#new-node-folder").value || selectedFolderId || ROOT_FOLDER;
+      const summary = document.querySelector("#new-node-summary").value.trim();
+      const rect = svg.getBoundingClientRect();
+      const center = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      commit(() => {
+        if (kind === "folder") {
+          const newFolderId = uniqueId("folder");
+          state.folders.push({ id: newFolderId, name: title, parentId: folderId, open: true });
+          const parent = folderMap().get(folderId);
+          if (parent) parent.open = true;
+          const node = {
+            id: folderNodeId(newFolderId),
+            kind: "folder",
+            title,
+            subject,
+            course: "",
+            chapter: "知识库层级",
+            summary: summary || "手动创建的目录节点。单击可折叠或展开下一级。",
+            folderId: newFolderId,
+            href: "",
+            x: center.x,
+            y: center.y,
+            hidden: false,
+            collapsed: false,
+          };
+          state.nodes.push(node);
+          selectedNodeId = node.id;
+          selectedFolderId = newFolderId;
+          selectedEdgeIndex = -1;
+          return;
+        }
+        const node = {
+          id: uniqueId("manual"),
+          kind: "manual",
+          title,
+          subject,
+          course: "",
+          chapter: "",
+          summary,
+          folderId,
+          href: "",
+          x: center.x,
+          y: center.y,
+          hidden: false,
+        };
+        state.nodes.push(node);
+        selectedNodeId = node.id;
+        selectedFolderId = folderId;
+        selectedEdgeIndex = -1;
+      }, "已添加节点");
     };
 
     svg.addEventListener("pointerdown", (event) => {
@@ -608,6 +1061,9 @@ const notes = Object.entries(modules)
           future.length = 0;
           save();
           announce("位置已保存");
+        } else {
+          const node = nodeMap().get(drag.id);
+          if (node?.kind === "folder") toggleFolderNode(node.id);
         }
         drag = null;
       }
@@ -621,20 +1077,39 @@ const notes = Object.entries(modules)
     searchInput.addEventListener("input", renderLibrary);
     document.querySelector("#undo").addEventListener("click", undo);
     document.querySelector("#redo").addEventListener("click", redo);
+    document.querySelector("#add-node").addEventListener("click", openNodeDialog);
+    document.querySelector("#build-map").addEventListener("click", buildMapFromHierarchy);
     document.querySelector("#auto-layout").addEventListener("click", autoLayout);
-    document.querySelector("#fit-view").addEventListener("click", fitView);
+    document.querySelector("#fit-view").addEventListener("click", () => fitView(false));
+    document.querySelector("#toggle-fullscreen").addEventListener("click", async () => {
+      app.classList.toggle("is-fullscreen");
+      if (app.classList.contains("is-fullscreen") && app.requestFullscreen && !document.fullscreenElement) {
+        try { await app.requestFullscreen(); } catch {}
+      } else if (!app.classList.contains("is-fullscreen") && document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch {}
+      }
+      window.setTimeout(() => fitView(true), 80);
+    });
+    document.addEventListener("fullscreenchange", () => {
+      app.classList.toggle("is-fullscreen", document.fullscreenElement === app);
+      window.setTimeout(() => fitView(true), 80);
+    });
     document.querySelector("#zoom-in").addEventListener("click", () => zoomAt(.84));
     document.querySelector("#zoom-out").addEventListener("click", () => zoomAt(1.18));
+    document.querySelector("#add-folder").addEventListener("click", addFolder);
+    document.querySelector("#rename-folder").addEventListener("click", renameFolder);
+    document.querySelector("#delete-folder").addEventListener("click", deleteFolder);
     document.querySelector("#clear-selection").addEventListener("click", () => { selectedNodeId = ""; renderAll(); });
     document.querySelector("#clear-edge-selection").addEventListener("click", () => { selectedEdgeIndex = -1; renderAll(); });
+    document.querySelector("#save-node").addEventListener("click", saveSelectedNode);
     document.querySelector("#add-edge").addEventListener("click", () => {
       if (!selectedNodeId || !targetSelect.value) return;
       const duplicate = state.edges.some((edge) => edge.from === selectedNodeId && edge.to === targetSelect.value);
-      if (duplicate) return announce("这两个知识点已经有连接了");
+      if (duplicate) return announce("这两个节点已经有连接了");
       const from = selectedNodeId;
       const to = targetSelect.value;
       const label = labelInput.value.trim() || "关联";
-      commit(() => state.edges.push({ from, to, label }), "已建立连接");
+      commit(() => state.edges.push({ from, to, label, kind: "relation" }), "已建立连接");
     });
     document.querySelector("#save-edge").addEventListener("click", () => {
       const value = document.querySelector("#selected-edge-label").value.trim();
@@ -652,10 +1127,10 @@ const notes = Object.entries(modules)
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `niutou-knowledge-graph-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `niutou-knowledge-workbench-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
-      announce("关系图已导出");
+      announce("工作台数据已导出");
     });
     document.querySelector("#import-graph").addEventListener("change", async (event) => {
       const file = event.target.files?.[0];
@@ -663,16 +1138,25 @@ const notes = Object.entries(modules)
       try {
         const imported = JSON.parse(await file.text());
         if (!Array.isArray(imported.nodes) || !Array.isArray(imported.edges)) throw new Error("invalid");
-        commit(() => { state = normalizeState(imported); selectedNodeId = ""; selectedEdgeIndex = -1; }, "导入成功");
-        fitView();
+        commit(() => { state = normalizeState(imported); selectedNodeId = ""; selectedEdgeIndex = -1; selectedFolderId = ROOT_FOLDER; }, "导入成功");
+        fitView(true);
       } catch { announce("文件格式不正确"); }
       event.target.value = "";
     });
     document.querySelector("#reset-graph").addEventListener("click", () => {
-      if (!window.confirm("恢复默认布局和关系？当前本地修改可先导出备份。")) return;
-      commit(() => { state = normalizeState(null); selectedNodeId = ""; selectedEdgeIndex = -1; }, "已恢复默认");
-      fitView();
+      if (!window.confirm("恢复默认层级、布局和关系？当前本地修改可先导出备份。")) return;
+      commit(() => { state = normalizeState(null); selectedNodeId = ""; selectedEdgeIndex = -1; selectedFolderId = ROOT_FOLDER; }, "已恢复默认");
+      fitView(true);
     });
+
+    const nodeDialog = document.querySelector("#node-dialog");
+    document.querySelector("#node-form").addEventListener("submit", (event) => {
+      if (event.submitter?.value === "cancel") return;
+      event.preventDefault();
+      createManualNode();
+      nodeDialog.close();
+    });
+    nodeDialog.addEventListener("click", (event) => { if (event.target === nodeDialog) nodeDialog.close(); });
 
     const dialog = document.querySelector("#shortcut-dialog");
     document.querySelector("#show-shortcuts").addEventListener("click", () => dialog.showModal());
@@ -688,7 +1172,7 @@ const notes = Object.entries(modules)
       else if (event.key.toLowerCase() === "v") setMode("select");
       else if (event.key.toLowerCase() === "c") setMode("connect");
       else if (event.key.toLowerCase() === "h") setMode("pan");
-      else if (event.key.toLowerCase() === "f") fitView();
+      else if (event.key.toLowerCase() === "f") fitView(false);
       else if (event.key.toLowerCase() === "l") autoLayout();
       else if (event.key === "?" || event.key === "F1") { event.preventDefault(); dialog.showModal(); }
       else if ((event.key === "Delete" || event.key === "Backspace") && selectedEdgeIndex >= 0) document.querySelector("#delete-edge").click();
@@ -696,8 +1180,10 @@ const notes = Object.entries(modules)
     });
     document.addEventListener("keyup", (event) => { if (event.code === "Space") spaceDown = false; });
 
-    renderFilters();
     renderAll();
-    window.setTimeout(fitView, 60);
+    save();
+    requestAnimationFrame(() => fitView(true));
+    window.setTimeout(() => fitView(true), 250);
+    new ResizeObserver(() => window.setTimeout(() => fitView(true), 40)).observe(svg);
   </script>
 </BaseLayout>
