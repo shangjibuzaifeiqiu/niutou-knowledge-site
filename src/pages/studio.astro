@@ -792,18 +792,24 @@ const notes = Object.entries(modules)
     const fitView = (silent = false) => {
       const graphNodes = visibleGraphNodes();
       if (!graphNodes.length) return;
-      const xs = graphNodes.map((node) => node.x);
-      const ys = graphNodes.map((node) => node.y);
-      const minX = Math.min(...xs) - 190;
-      const maxX = Math.max(...xs) + 190;
-      const minY = Math.min(...ys) - 130;
-      const maxY = Math.max(...ys) + 130;
       const rect = svg.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
-      const dataW = maxX - minX;
-      const dataH = maxY - minY;
-      const width = Math.max(dataW, dataH * rect.width / rect.height, 760);
-      view = { x: (minX + maxX - width) / 2, y: (minY + maxY - width * rect.height / rect.width) / 2, w: width, h: width * rect.height / rect.width };
+      const paddingX = 220;
+      const paddingY = 170;
+      const minX = Math.min(...graphNodes.map((node) => node.x - NODE_W / 2)) - paddingX;
+      const maxX = Math.max(...graphNodes.map((node) => node.x + NODE_W / 2)) + paddingX;
+      const minY = Math.min(...graphNodes.map((node) => node.y - NODE_H / 2)) - paddingY;
+      const maxY = Math.max(...graphNodes.map((node) => node.y + NODE_H / 2)) + paddingY;
+      const boxW = Math.max(maxX - minX, 760);
+      const boxH = Math.max(maxY - minY, 460);
+      const viewportRatio = rect.width / rect.height;
+      let width = boxW;
+      let height = width / viewportRatio;
+      if (height < boxH) {
+        height = boxH;
+        width = height * viewportRatio;
+      }
+      view = { x: (minX + maxX) / 2 - width / 2, y: (minY + maxY) / 2 - height / 2, w: width, h: height };
       updateView();
       if (!silent) announce("已居中显示知识地图");
     };

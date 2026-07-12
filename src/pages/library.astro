@@ -17,50 +17,78 @@ const notes = Object.entries(modules)
   <section class="library-hero">
     <span class="eyebrow">KNOWLEDGE LIBRARY</span>
     <h1>知识库</h1>
-    <p>搜索课程、概念、公式或标签。也可以在本机编辑知识点归档层级，再导出 JSON 让我写回网站。</p>
+    <p>左侧整理层级，右侧浏览知识点。层级改动会先保存在当前浏览器，导出 JSON 后可写回源码。</p>
     <input id="search" class="search-box" type="search" placeholder="试试：虚位移、静电场、微分方程…" aria-label="搜索知识库" />
-    <div class="library-tools" aria-label="知识库视图控制">
-      <button class="chip-button is-active" type="button" data-view="cards">卡片</button>
-      <button class="chip-button" type="button" data-view="tree">层级</button>
-      <button class="chip-button" type="button" id="edit-taxonomy">编辑层级</button>
-      <a class="chip-button" href="/studio">关系图工作台</a>
-    </div>
   </section>
-  <section class="note-grid" id="note-grid">
-    {notes.map((note: any) => (
-      <div data-note data-id={note.href} data-search={`${note.title} ${note.subject} ${note.course} ${note.chapter} ${note.summary} ${(note.tags || []).join(" ")}`}>
-        <NoteCard {...note} />
+
+  <section class="library-workspace" aria-label="知识库管理">
+    <aside class="library-sidebar" aria-label="知识库层级导航">
+      <div class="library-sidebar__heading">
+        <div>
+          <strong>层级</strong>
+          <span id="library-current-path">全部知识</span>
+        </div>
+        <span id="library-count" class="studio-count"></span>
       </div>
-    ))}
-  </section>
-  <section class="hierarchy-board" id="hierarchy-board" hidden></section>
-  <section class="taxonomy-editor" id="taxonomy-editor" hidden>
-    <div class="section-heading compact">
-      <div><span class="eyebrow">LOCAL ARCHIVE EDITOR</span><h2>编辑归档层级</h2></div>
-      <p>这些改动先保存在当前浏览器。导出 JSON 后，我可以把它固化进仓库。</p>
+      <div class="library-sidebar__actions">
+        <button type="button" id="rename-scope">重命名</button>
+        <button type="button" id="export-taxonomy">导出 JSON</button>
+        <button type="button" id="reset-taxonomy">恢复默认</button>
+      </div>
+      <nav id="library-tree" class="library-tree" aria-label="知识库文件夹树"></nav>
+      <div id="library-editor" class="library-side-editor" hidden>
+        <div class="library-side-editor__title">
+          <strong id="editor-title">编辑层级</strong>
+          <span id="editor-kind"></span>
+        </div>
+        <label>学科<input id="edit-subject" /></label>
+        <label>课程<input id="edit-course" /></label>
+        <label>章节<input id="edit-chapter" /></label>
+        <button class="button" type="button" id="save-taxonomy">保存层级</button>
+      </div>
+    </aside>
+
+    <div class="library-content">
+      <div class="library-tools" aria-label="知识库视图控制">
+        <button class="chip-button is-active" type="button" data-view="cards">卡片</button>
+        <button class="chip-button" type="button" data-view="tree">层级视图</button>
+        <a class="chip-button" href="/studio">关系图工作台</a>
+      </div>
+      <section class="note-grid" id="note-grid">
+        {notes.map((note: any) => (
+          <div data-note data-id={note.href} data-search={`${note.title} ${note.subject} ${note.course} ${note.chapter} ${note.summary} ${(note.tags || []).join(" ")}`}>
+            <NoteCard {...note} />
+          </div>
+        ))}
+      </section>
+      <section class="hierarchy-board" id="hierarchy-board" hidden></section>
     </div>
-    <div class="editor-actions">
-      <button class="button" type="button" id="save-taxonomy">保存本机层级</button>
-      <button class="button button--ghost" type="button" id="export-taxonomy">导出 JSON</button>
-      <button class="button button--ghost" type="button" id="reset-taxonomy">恢复默认</button>
-    </div>
-    <div class="taxonomy-list" id="taxonomy-list"></div>
   </section>
   <div style="height: 80px"></div>
+
   <script define:vars={{ notes }}>
     const storageKey = "niutou.taxonomy.v1";
     const input = document.querySelector("#search");
     const cards = [...document.querySelectorAll("[data-note]")];
     const noteGrid = document.querySelector("#note-grid");
     const hierarchyBoard = document.querySelector("#hierarchy-board");
-    const taxonomyEditor = document.querySelector("#taxonomy-editor");
-    const taxonomyList = document.querySelector("#taxonomy-list");
-    const editButton = document.querySelector("#edit-taxonomy");
+    const treeRoot = document.querySelector("#library-tree");
+    const currentPath = document.querySelector("#library-current-path");
+    const libraryCount = document.querySelector("#library-count");
+    const editor = document.querySelector("#library-editor");
+    const editorTitle = document.querySelector("#editor-title");
+    const editorKind = document.querySelector("#editor-kind");
+    const subjectInput = document.querySelector("#edit-subject");
+    const courseInput = document.querySelector("#edit-course");
+    const chapterInput = document.querySelector("#edit-chapter");
     const saveButton = document.querySelector("#save-taxonomy");
+    const renameButton = document.querySelector("#rename-scope");
     const exportButton = document.querySelector("#export-taxonomy");
     const resetButton = document.querySelector("#reset-taxonomy");
     const viewButtons = [...document.querySelectorAll("[data-view]")];
     const baseNotes = notes.map((note) => ({ ...note, id: note.href }));
+    let selected = { type: "all", subject: "", course: "", chapter: "", id: "" };
+    let activeView = "cards";
 
     const loadOverrides = () => {
       try {
@@ -71,14 +99,33 @@ const notes = Object.entries(modules)
     };
 
     let overrides = loadOverrides();
-
     const enrichedNotes = () => baseNotes.map((note) => ({ ...note, ...(overrides[note.id] || {}) }));
+
+    const sameScope = (note, scope = selected) => {
+      if (scope.type === "all") return true;
+      if (scope.type === "subject") return note.subject === scope.subject;
+      if (scope.type === "course") return note.subject === scope.subject && note.course === scope.course;
+      if (scope.type === "chapter") return note.subject === scope.subject && note.course === scope.course && note.chapter === scope.chapter;
+      if (scope.type === "note") return note.id === scope.id;
+      return true;
+    };
+
+    const selectedNotes = () => enrichedNotes().filter((note) => sameScope(note));
+    const selectedPathText = () => {
+      if (selected.type === "all") return "全部知识";
+      if (selected.type === "subject") return selected.subject;
+      if (selected.type === "course") return `${selected.subject} / ${selected.course}`;
+      if (selected.type === "chapter") return `${selected.subject} / ${selected.course} / ${selected.chapter}`;
+      const note = enrichedNotes().find((item) => item.id === selected.id);
+      return note?.title || "知识点";
+    };
 
     const groupNotes = (items) => {
       const tree = new Map();
       items.forEach((note) => {
-        if (!tree.has(note.subject)) tree.set(note.subject, new Map());
-        const subject = tree.get(note.subject);
+        const subjectKey = note.subject || "未归档学科";
+        if (!tree.has(subjectKey)) tree.set(subjectKey, new Map());
+        const subject = tree.get(subjectKey);
         const courseKey = note.course || "未归档课程";
         if (!subject.has(courseKey)) subject.set(courseKey, new Map());
         const course = subject.get(courseKey);
@@ -89,9 +136,57 @@ const notes = Object.entries(modules)
       return tree;
     };
 
+    const treeButton = ({ type, label, count, depth, scope }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `library-tree-row ${selected.type === type && selected.subject === (scope.subject || "") && selected.course === (scope.course || "") && selected.chapter === (scope.chapter || "") && selected.id === (scope.id || "") ? "is-selected" : ""}`;
+      button.style.setProperty("--depth", String(depth));
+      button.innerHTML = `<span>${type === "note" ? "•" : "▣"}</span><strong>${label}</strong><small>${count}</small>`;
+      button.addEventListener("click", () => {
+        selected = { type, subject: scope.subject || "", course: scope.course || "", chapter: scope.chapter || "", id: scope.id || "" };
+        renderAll();
+      });
+      return button;
+    };
+
+    const renderSidebar = () => {
+      const notesNow = enrichedNotes();
+      const tree = groupNotes(notesNow);
+      treeRoot.innerHTML = "";
+      treeRoot.appendChild(treeButton({ type: "all", label: "全部知识", count: notesNow.length, depth: 0, scope: {} }));
+      tree.forEach((courses, subject) => {
+        const subjectCount = [...courses.values()].reduce((sum, chapters) => sum + [...chapters.values()].reduce((inner, items) => inner + items.length, 0), 0);
+        treeRoot.appendChild(treeButton({ type: "subject", label: subject, count: subjectCount, depth: 0, scope: { subject } }));
+        courses.forEach((chapters, course) => {
+          const courseCount = [...chapters.values()].reduce((sum, items) => sum + items.length, 0);
+          treeRoot.appendChild(treeButton({ type: "course", label: course, count: courseCount, depth: 1, scope: { subject, course } }));
+          chapters.forEach((items, chapter) => {
+            treeRoot.appendChild(treeButton({ type: "chapter", label: chapter, count: items.length, depth: 2, scope: { subject, course, chapter } }));
+            items.forEach((note) => treeRoot.appendChild(treeButton({ type: "note", label: note.title, count: "", depth: 3, scope: { subject, course, chapter, id: note.id } })));
+          });
+        });
+      });
+      currentPath.textContent = selectedPathText();
+      libraryCount.textContent = `${selectedNotes().length}/${notesNow.length}`;
+    };
+
+    const renderEditor = () => {
+      const items = selectedNotes();
+      editor.hidden = selected.type === "all" || !items.length;
+      if (editor.hidden) return;
+      const note = selected.type === "note" ? items[0] : null;
+      editorTitle.textContent = selected.type === "note" ? note.title : selectedPathText();
+      editorKind.textContent = selected.type === "note" ? "知识点" : "文件夹";
+      subjectInput.value = note?.subject || selected.subject || "";
+      courseInput.value = note?.course || selected.course || "";
+      chapterInput.value = note?.chapter || selected.chapter || "";
+      subjectInput.disabled = selected.type === "subject";
+      courseInput.disabled = selected.type === "course";
+      chapterInput.disabled = selected.type === "chapter";
+    };
+
     const renderHierarchy = () => {
-      if (!hierarchyBoard) return;
-      const tree = groupNotes(enrichedNotes());
+      const tree = groupNotes(selectedNotes());
       hierarchyBoard.innerHTML = "";
       tree.forEach((courses, subject) => {
         const section = document.createElement("article");
@@ -123,36 +218,79 @@ const notes = Object.entries(modules)
       });
     };
 
-    const renderEditor = () => {
-      if (!taxonomyList) return;
-      taxonomyList.innerHTML = "";
-      enrichedNotes().forEach((note) => {
-        const row = document.createElement("article");
-        row.className = "taxonomy-row";
-        row.dataset.id = note.id;
-        row.innerHTML = `
-          <a href="${note.href}">${note.title}</a>
-          <label>学科<input name="subject" value="${note.subject || ""}" /></label>
-          <label>课程<input name="course" value="${note.course || ""}" /></label>
-          <label>章节<input name="chapter" value="${note.chapter || ""}" /></label>
-        `;
-        taxonomyList.appendChild(row);
+    const renderCards = () => {
+      const query = (input?.value || "").trim().toLowerCase();
+      const notesById = new Map(enrichedNotes().map((note) => [note.id, note]));
+      cards.forEach((card) => {
+        const note = notesById.get(card.dataset.id);
+        const haystack = `${note?.title || ""} ${note?.subject || ""} ${note?.course || ""} ${note?.chapter || ""} ${note?.summary || ""} ${(note?.tags || []).join(" ")}`.toLowerCase();
+        const pill = card.querySelector(".pill");
+        if (pill && note?.subject) pill.textContent = note.subject;
+        card.hidden = !note || !sameScope(note) || Boolean(query && !haystack.includes(query));
       });
     };
 
-    const collectEditor = () => {
-      const next = {};
-      document.querySelectorAll(".taxonomy-row").forEach((row) => {
-        const id = row.dataset.id;
-        next[id] = {
-          subject: row.querySelector('[name="subject"]').value.trim(),
-          course: row.querySelector('[name="course"]').value.trim(),
-          chapter: row.querySelector('[name="chapter"]').value.trim(),
-        };
-      });
-      overrides = next;
-      localStorage.setItem(storageKey, JSON.stringify(overrides, null, 2));
+    const renderAll = () => {
+      renderSidebar();
+      renderEditor();
+      renderCards();
       renderHierarchy();
+      noteGrid.hidden = activeView !== "cards";
+      hierarchyBoard.hidden = activeView !== "tree";
+    };
+
+    const saveOverrides = () => localStorage.setItem(storageKey, JSON.stringify(overrides, null, 2));
+    const updateNotes = (predicate, updater) => {
+      enrichedNotes().filter(predicate).forEach((note) => {
+        const next = { subject: note.subject || "", course: note.course || "", chapter: note.chapter || "" };
+        updater(next, note);
+        overrides[note.id] = next;
+      });
+      saveOverrides();
+      renderAll();
+    };
+
+    const saveSelected = () => {
+      if (selected.type === "all") return;
+      const subject = subjectInput.value.trim();
+      const course = courseInput.value.trim();
+      const chapter = chapterInput.value.trim();
+      updateNotes((note) => sameScope(note), (next) => {
+        if (selected.type === "note") {
+          next.subject = subject;
+          next.course = course;
+          next.chapter = chapter;
+        } else if (selected.type === "subject") {
+          next.subject = selected.subject;
+          next.course = course || next.course;
+          next.chapter = chapter || next.chapter;
+        } else if (selected.type === "course") {
+          next.subject = selected.subject;
+          next.course = selected.course;
+          next.chapter = chapter || next.chapter;
+        } else if (selected.type === "chapter") {
+          next.subject = selected.subject;
+          next.course = selected.course;
+          next.chapter = selected.chapter;
+        }
+      });
+    };
+
+    const renameScope = () => {
+      if (selected.type === "all" || selected.type === "note") return;
+      const current = selected.type === "subject" ? selected.subject : selected.type === "course" ? selected.course : selected.chapter;
+      const nextName = window.prompt("新的名称", current);
+      if (!nextName?.trim() || nextName.trim() === current) return;
+      const oldSelected = { ...selected };
+      updateNotes((note) => sameScope(note, oldSelected), (next) => {
+        if (oldSelected.type === "subject") next.subject = nextName.trim();
+        if (oldSelected.type === "course") next.course = nextName.trim();
+        if (oldSelected.type === "chapter") next.chapter = nextName.trim();
+      });
+      if (oldSelected.type === "subject") selected.subject = nextName.trim();
+      if (oldSelected.type === "course") selected.course = nextName.trim();
+      if (oldSelected.type === "chapter") selected.chapter = nextName.trim();
+      renderAll();
     };
 
     const downloadJson = (name, payload) => {
@@ -168,33 +306,21 @@ const notes = Object.entries(modules)
     const params = new URLSearchParams(window.location.search);
     const initial = params.get("q") || "";
     if (input) input.value = initial;
-    const filter = () => {
-      const query = (input?.value || "").trim().toLowerCase();
-      cards.forEach((card) => {
-        card.hidden = query.length > 0 && !(card.dataset.search || "").toLowerCase().includes(query);
-      });
-    };
-    input?.addEventListener("input", filter);
+    input?.addEventListener("input", renderAll);
     viewButtons.forEach((button) => button.addEventListener("click", () => {
-      const mode = button.dataset.view;
+      activeView = button.dataset.view;
       viewButtons.forEach((item) => item.classList.toggle("is-active", item === button));
-      noteGrid.hidden = mode !== "cards";
-      hierarchyBoard.hidden = mode !== "tree";
-      if (mode === "tree") renderHierarchy();
+      renderAll();
     }));
-    editButton?.addEventListener("click", () => {
-      taxonomyEditor.hidden = !taxonomyEditor.hidden;
-      if (!taxonomyEditor.hidden) renderEditor();
-    });
-    saveButton?.addEventListener("click", collectEditor);
-    exportButton?.addEventListener("click", () => downloadJson("niutou-taxonomy.json", { version: 1, overrides }));
-    resetButton?.addEventListener("click", () => {
+    saveButton.addEventListener("click", saveSelected);
+    renameButton.addEventListener("click", renameScope);
+    exportButton.addEventListener("click", () => downloadJson("niutou-taxonomy.json", { version: 1, overrides }));
+    resetButton.addEventListener("click", () => {
       overrides = {};
+      selected = { type: "all", subject: "", course: "", chapter: "", id: "" };
       localStorage.removeItem(storageKey);
-      renderEditor();
-      renderHierarchy();
+      renderAll();
     });
-    renderHierarchy();
-    filter();
+    renderAll();
   </script>
 </BaseLayout>
