@@ -11,60 +11,98 @@ const notes = Object.entries(modules)
       "zh-CN",
     )
   );
+const subjectCount = new Set(notes.map((note: any) => note.subject)).size;
+const chapterCount = new Set(notes.map((note: any) => `${note.course}/${note.chapter}`)).size;
 ---
 
-<BaseLayout title="知识库" description="数学与物理手写笔记整理后的知识页面">
-  <section class="library-hero">
-    <span class="eyebrow">KNOWLEDGE LIBRARY</span>
-    <h1>知识库</h1>
-    <p>左侧整理层级，右侧浏览知识点。层级改动会先保存在当前浏览器，导出 JSON 后可写回源码。</p>
-    <input id="search" class="search-box" type="search" placeholder="试试：虚位移、静电场、微分方程…" aria-label="搜索知识库" />
+<BaseLayout title="知识库" description="按学科、课程、章节和知识点组织的数学物理个人知识库">
+  <section class="library-page-head">
+    <div>
+      <span class="eyebrow">KNOWLEDGE LIBRARY</span>
+      <h1>知识库</h1>
+      <p>像使用笔记软件一样浏览和整理知识。左侧管理层级，右侧阅读知识点；所有更改可导出后写回源码。</p>
+    </div>
+    <dl class="library-head-stats" aria-label="知识库统计">
+      <div><dt>{notes.length}</dt><dd>知识点</dd></div>
+      <div><dt>{subjectCount}</dt><dd>学科</dd></div>
+      <div><dt>{chapterCount}</dt><dd>章节</dd></div>
+    </dl>
   </section>
 
-  <section class="library-workspace" aria-label="知识库管理">
-    <aside class="library-sidebar" aria-label="知识库层级导航">
-      <div class="library-sidebar__heading">
-        <div>
-          <strong>层级</strong>
-          <span id="library-current-path">全部知识</span>
-        </div>
-        <span id="library-count" class="studio-count"></span>
+  <section class="library-app" aria-label="知识库管理界面">
+    <aside class="library-sidebar" aria-label="知识库导航栏">
+      <div class="library-sidebar__brand">
+        <span class="library-sidebar__logo">N</span>
+        <div><strong>我的知识库</strong><small id="library-save-state">本地修改会自动保存</small></div>
+        <a href="/studio" title="打开知识工作台" aria-label="打开知识工作台">⌁</a>
       </div>
-      <div class="library-sidebar__actions">
-        <button type="button" id="rename-scope">重命名</button>
-        <button type="button" id="export-taxonomy">导出 JSON</button>
-        <button type="button" id="reset-taxonomy">恢复默认</button>
+
+      <label class="library-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="搜索标题、公式或标签…" autocomplete="off" />
+        <kbd>/</kbd>
+      </label>
+
+      <div class="library-quick-nav" aria-label="快捷视图">
+        <button type="button" data-quick="all" class="is-active"><span>▦</span><strong>全部知识</strong><small>{notes.length}</small></button>
+        <button type="button" data-quick="recent"><span>◷</span><strong>最近整理</strong><small>6</small></button>
+        <button type="button" data-quick="review"><span>◇</span><strong>待复核</strong><small id="review-count">0</small></button>
       </div>
-      <nav id="library-tree" class="library-tree" aria-label="知识库文件夹树"></nav>
+
+      <div class="library-tree-heading">
+        <span>知识目录</span>
+        <button type="button" id="add-library-folder" title="在当前目录下新建文件夹" aria-label="新建文件夹">＋</button>
+      </div>
+      <nav id="library-tree" class="library-tree" aria-label="学科课程章节目录"></nav>
+
       <div id="library-editor" class="library-side-editor" hidden>
         <div class="library-side-editor__title">
-          <strong id="editor-title">编辑层级</strong>
-          <span id="editor-kind"></span>
+          <div><strong id="editor-title">属性</strong><span id="editor-kind"></span></div>
+          <button type="button" id="close-editor" aria-label="关闭属性面板">×</button>
         </div>
         <label>学科<input id="edit-subject" /></label>
         <label>课程<input id="edit-course" /></label>
         <label>章节<input id="edit-chapter" /></label>
-        <button class="button" type="button" id="save-taxonomy">保存层级</button>
+        <div class="library-editor-actions">
+          <button class="button" type="button" id="save-taxonomy">保存归档</button>
+          <button type="button" id="delete-empty-folder" hidden>删除空文件夹</button>
+        </div>
+      </div>
+
+      <div class="library-sidebar__footer">
+        <button type="button" id="export-taxonomy"><span>⇩</span> 导出结构</button>
+        <button type="button" id="reset-taxonomy"><span>↺</span> 恢复默认</button>
       </div>
     </aside>
 
-    <div class="library-content">
-      <div class="library-tools" aria-label="知识库视图控制">
-        <button class="chip-button is-active" type="button" data-view="cards">卡片</button>
-        <button class="chip-button" type="button" data-view="tree">层级视图</button>
-        <a class="chip-button" href="/studio">关系图工作台</a>
+    <div class="library-main">
+      <header class="library-mainbar">
+        <div class="library-breadcrumb"><span>知识库</span><b>›</b><strong id="library-current-path">全部知识</strong></div>
+        <div class="library-mainbar__actions">
+          <button class="library-view-button is-active" type="button" data-view="cards" aria-label="卡片视图"><span>▦</span> 卡片</button>
+          <button class="library-view-button" type="button" data-view="tree" aria-label="层级视图"><span>☷</span> 大纲</button>
+          <a class="library-open-studio" href="/studio"><span>⌁</span> 生成知识地图</a>
+        </div>
+      </header>
+
+      <div class="library-scope-head">
+        <div class="library-scope-icon" id="scope-icon">▦</div>
+        <div><span id="scope-kicker">全部知识</span><h2 id="scope-title">所有知识点</h2><p id="scope-description">从学科到课程逐层浏览，或直接搜索一个概念。</p></div>
+        <span id="library-count" class="library-result-count"></span>
       </div>
-      <section class="note-grid" id="note-grid">
+
+      <section class="note-grid library-note-grid" id="note-grid">
         {notes.map((note: any) => (
           <div data-note data-id={note.href} data-search={`${note.title} ${note.subject} ${note.course} ${note.chapter} ${note.summary} ${(note.tags || []).join(" ")}`}>
             <NoteCard {...note} />
           </div>
         ))}
       </section>
-      <section class="hierarchy-board" id="hierarchy-board" hidden></section>
+      <section class="hierarchy-board library-outline" id="hierarchy-board" hidden></section>
+      <div id="library-empty" class="library-empty" hidden><span>⌕</span><h3>没有找到知识点</h3><p>换一个关键词，或从左侧选择其他目录。</p></div>
     </div>
   </section>
-  <div style="height: 80px"></div>
+  <div id="library-toast" class="studio-toast" role="status" aria-live="polite"></div>
 
   <script define:vars={{ notes }}>
     const storageKey = "niutou.taxonomy.v1";
@@ -75,6 +113,11 @@ const notes = Object.entries(modules)
     const treeRoot = document.querySelector("#library-tree");
     const currentPath = document.querySelector("#library-current-path");
     const libraryCount = document.querySelector("#library-count");
+    const emptyState = document.querySelector("#library-empty");
+    const scopeIcon = document.querySelector("#scope-icon");
+    const scopeKicker = document.querySelector("#scope-kicker");
+    const scopeTitle = document.querySelector("#scope-title");
+    const scopeDescription = document.querySelector("#scope-description");
     const editor = document.querySelector("#library-editor");
     const editorTitle = document.querySelector("#editor-title");
     const editorKind = document.querySelector("#editor-kind");
@@ -82,126 +125,220 @@ const notes = Object.entries(modules)
     const courseInput = document.querySelector("#edit-course");
     const chapterInput = document.querySelector("#edit-chapter");
     const saveButton = document.querySelector("#save-taxonomy");
-    const renameButton = document.querySelector("#rename-scope");
+    const deleteButton = document.querySelector("#delete-empty-folder");
+    const addFolderButton = document.querySelector("#add-library-folder");
     const exportButton = document.querySelector("#export-taxonomy");
     const resetButton = document.querySelector("#reset-taxonomy");
     const viewButtons = [...document.querySelectorAll("[data-view]")];
+    const quickButtons = [...document.querySelectorAll("[data-quick]")];
+    const toast = document.querySelector("#library-toast");
     const baseNotes = notes.map((note) => ({ ...note, id: note.href }));
+    const recentIds = new Set([...baseNotes].sort((a, b) => String(b.updated).localeCompare(String(a.updated))).slice(0, 6).map((note) => note.id));
     let selected = { type: "all", subject: "", course: "", chapter: "", id: "" };
     let activeView = "cards";
+    let toastTimer;
 
-    const loadOverrides = () => {
+    const folderKey = (type, subject = "", course = "", chapter = "") => `${type}:${subject}/${course}/${chapter}`;
+    const expanded = new Set();
+    const uniqueId = () => `folder-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 7)}`;
+
+    const loadWorkspace = () => {
       try {
-        return JSON.parse(localStorage.getItem(storageKey) || "{}");
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        if (saved?.version === 2) return { overrides: saved.overrides || {}, folders: saved.folders || [] };
+        return { overrides: saved && typeof saved === "object" ? saved : {}, folders: [] };
       } catch {
-        return {};
+        return { overrides: {}, folders: [] };
       }
     };
 
-    let overrides = loadOverrides();
-    const enrichedNotes = () => baseNotes.map((note) => ({ ...note, ...(overrides[note.id] || {}) }));
+    let workspace = loadWorkspace();
+    const saveWorkspace = () => {
+      localStorage.setItem(storageKey, JSON.stringify({ version: 2, ...workspace }, null, 2));
+      document.querySelector("#library-save-state").textContent = "更改已保存到当前浏览器";
+    };
+    const announce = (message) => {
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
+    };
 
+    const enrichedNotes = () => baseNotes.map((note) => ({ ...note, ...(workspace.overrides[note.id] || {}) }));
     const sameScope = (note, scope = selected) => {
       if (scope.type === "all") return true;
+      if (scope.type === "recent") return recentIds.has(note.id);
+      if (scope.type === "review") return String(note.status || "").includes("待复核");
       if (scope.type === "subject") return note.subject === scope.subject;
       if (scope.type === "course") return note.subject === scope.subject && note.course === scope.course;
       if (scope.type === "chapter") return note.subject === scope.subject && note.course === scope.course && note.chapter === scope.chapter;
       if (scope.type === "note") return note.id === scope.id;
       return true;
     };
-
     const selectedNotes = () => enrichedNotes().filter((note) => sameScope(note));
-    const selectedPathText = () => {
+
+    const pathText = () => {
       if (selected.type === "all") return "全部知识";
+      if (selected.type === "recent") return "最近整理";
+      if (selected.type === "review") return "待复核";
       if (selected.type === "subject") return selected.subject;
       if (selected.type === "course") return `${selected.subject} / ${selected.course}`;
       if (selected.type === "chapter") return `${selected.subject} / ${selected.course} / ${selected.chapter}`;
-      const note = enrichedNotes().find((item) => item.id === selected.id);
-      return note?.title || "知识点";
+      return enrichedNotes().find((item) => item.id === selected.id)?.title || "知识点";
     };
 
-    const groupNotes = (items) => {
+    const groupNotes = (items = enrichedNotes()) => {
       const tree = new Map();
-      items.forEach((note) => {
-        const subjectKey = note.subject || "未归档学科";
-        if (!tree.has(subjectKey)) tree.set(subjectKey, new Map());
-        const subject = tree.get(subjectKey);
-        const courseKey = note.course || "未归档课程";
-        if (!subject.has(courseKey)) subject.set(courseKey, new Map());
-        const course = subject.get(courseKey);
-        const chapterKey = note.chapter || "未归档章节";
-        if (!course.has(chapterKey)) course.set(chapterKey, []);
-        course.get(chapterKey).push(note);
+      const ensureSubject = (subject) => {
+        if (!tree.has(subject)) tree.set(subject, new Map());
+        return tree.get(subject);
+      };
+      const ensureCourse = (subject, course) => {
+        const subjectNode = ensureSubject(subject);
+        if (!subjectNode.has(course)) subjectNode.set(course, new Map());
+        return subjectNode.get(course);
+      };
+      const ensureChapter = (subject, course, chapter) => {
+        const courseNode = ensureCourse(subject, course);
+        if (!courseNode.has(chapter)) courseNode.set(chapter, []);
+        return courseNode.get(chapter);
+      };
+      items.forEach((note) => ensureChapter(note.subject || "未归档学科", note.course || "未归档课程", note.chapter || "未归档章节").push(note));
+      workspace.folders.forEach((folder) => {
+        if (folder.type === "subject") ensureSubject(folder.subject);
+        if (folder.type === "course") ensureCourse(folder.subject, folder.course);
+        if (folder.type === "chapter") ensureChapter(folder.subject, folder.course, folder.chapter);
       });
       return tree;
     };
 
-    const treeButton = ({ type, label, count, depth, scope }) => {
+    const isSelected = (type, scope) => selected.type === type && selected.subject === (scope.subject || "") && selected.course === (scope.course || "") && selected.chapter === (scope.chapter || "") && selected.id === (scope.id || "");
+    const selectScope = (type, scope = {}) => {
+      selected = { type, subject: scope.subject || "", course: scope.course || "", chapter: scope.chapter || "", id: scope.id || "" };
+      renderAll();
+    };
+
+    const createTreeRow = ({ type, label, count = "", depth, scope, hasChildren = false }) => {
+      const row = document.createElement("div");
+      row.className = `library-tree-item ${isSelected(type, scope) ? "is-selected" : ""}`;
+      row.style.setProperty("--depth", String(depth));
+      const key = folderKey(type, scope.subject, scope.course, scope.chapter);
+      const disclosure = document.createElement("button");
+      disclosure.type = "button";
+      disclosure.className = "library-tree-disclosure";
+      disclosure.textContent = type === "note" ? "·" : expanded.has(key) ? "⌄" : "›";
+      disclosure.disabled = !hasChildren;
+      disclosure.setAttribute("aria-label", expanded.has(key) ? "折叠" : "展开");
+      disclosure.addEventListener("click", () => {
+        if (!hasChildren) return;
+        expanded.has(key) ? expanded.delete(key) : expanded.add(key);
+        renderSidebar();
+      });
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `library-tree-row ${selected.type === type && selected.subject === (scope.subject || "") && selected.course === (scope.course || "") && selected.chapter === (scope.chapter || "") && selected.id === (scope.id || "") ? "is-selected" : ""}`;
-      button.style.setProperty("--depth", String(depth));
-      button.innerHTML = `<span>${type === "note" ? "•" : "▣"}</span><strong>${label}</strong><small>${count}</small>`;
-      button.addEventListener("click", () => {
-        selected = { type, subject: scope.subject || "", course: scope.course || "", chapter: scope.chapter || "", id: scope.id || "" };
-        renderAll();
-      });
-      return button;
+      button.className = "library-tree-select";
+      const icon = document.createElement("span");
+      icon.className = "library-tree-icon";
+      icon.textContent = type === "note" ? "▤" : "▰";
+      const title = document.createElement("strong");
+      title.textContent = label;
+      const total = document.createElement("small");
+      total.textContent = String(count);
+      button.append(icon, title, total);
+      button.addEventListener("click", () => selectScope(type, scope));
+      if (type === "note") button.addEventListener("dblclick", () => { window.location.href = scope.id; });
+      row.append(disclosure, button);
+      return { row, key };
     };
 
     const renderSidebar = () => {
       const notesNow = enrichedNotes();
       const tree = groupNotes(notesNow);
       treeRoot.innerHTML = "";
-      treeRoot.appendChild(treeButton({ type: "all", label: "全部知识", count: notesNow.length, depth: 0, scope: {} }));
       tree.forEach((courses, subject) => {
         const subjectCount = [...courses.values()].reduce((sum, chapters) => sum + [...chapters.values()].reduce((inner, items) => inner + items.length, 0), 0);
-        treeRoot.appendChild(treeButton({ type: "subject", label: subject, count: subjectCount, depth: 0, scope: { subject } }));
+        const subjectRow = createTreeRow({ type: "subject", label: subject, count: subjectCount, depth: 0, scope: { subject }, hasChildren: courses.size > 0 });
+        treeRoot.appendChild(subjectRow.row);
+        if (!expanded.has(subjectRow.key)) return;
         courses.forEach((chapters, course) => {
           const courseCount = [...chapters.values()].reduce((sum, items) => sum + items.length, 0);
-          treeRoot.appendChild(treeButton({ type: "course", label: course, count: courseCount, depth: 1, scope: { subject, course } }));
+          const courseRow = createTreeRow({ type: "course", label: course, count: courseCount, depth: 1, scope: { subject, course }, hasChildren: chapters.size > 0 });
+          treeRoot.appendChild(courseRow.row);
+          if (!expanded.has(courseRow.key)) return;
           chapters.forEach((items, chapter) => {
-            treeRoot.appendChild(treeButton({ type: "chapter", label: chapter, count: items.length, depth: 2, scope: { subject, course, chapter } }));
-            items.forEach((note) => treeRoot.appendChild(treeButton({ type: "note", label: note.title, count: "", depth: 3, scope: { subject, course, chapter, id: note.id } })));
+            const chapterRow = createTreeRow({ type: "chapter", label: chapter, count: items.length, depth: 2, scope: { subject, course, chapter }, hasChildren: items.length > 0 });
+            treeRoot.appendChild(chapterRow.row);
+            if (!expanded.has(chapterRow.key)) return;
+            items.forEach((note) => treeRoot.appendChild(createTreeRow({ type: "note", label: note.title, depth: 3, scope: { subject, course, chapter, id: note.id } }).row));
           });
         });
       });
-      currentPath.textContent = selectedPathText();
-      libraryCount.textContent = `${selectedNotes().length}/${notesNow.length}`;
+      currentPath.textContent = pathText();
+      quickButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.quick === selected.type));
     };
 
+    const matchingCustomFolder = () => workspace.folders.find((folder) => folder.type === selected.type && folder.subject === selected.subject && (selected.type === "subject" || folder.course === selected.course) && (selected.type !== "chapter" || folder.chapter === selected.chapter));
     const renderEditor = () => {
       const items = selectedNotes();
-      editor.hidden = selected.type === "all" || !items.length;
+      editor.hidden = !["subject", "course", "chapter", "note"].includes(selected.type);
       if (editor.hidden) return;
       const note = selected.type === "note" ? items[0] : null;
-      editorTitle.textContent = selected.type === "note" ? note.title : selectedPathText();
-      editorKind.textContent = selected.type === "note" ? "知识点" : "文件夹";
+      editorTitle.textContent = note?.title || pathText();
+      editorKind.textContent = selected.type === "note" ? "知识点归档" : "文件夹属性";
       subjectInput.value = note?.subject || selected.subject || "";
       courseInput.value = note?.course || selected.course || "";
       chapterInput.value = note?.chapter || selected.chapter || "";
-      subjectInput.disabled = selected.type === "subject";
-      courseInput.disabled = selected.type === "course";
-      chapterInput.disabled = selected.type === "chapter";
+      subjectInput.disabled = selected.type === "course" || selected.type === "chapter";
+      courseInput.disabled = selected.type === "subject" || selected.type === "chapter";
+      chapterInput.disabled = selected.type === "subject" || selected.type === "course";
+      deleteButton.hidden = selected.type === "note" || items.length > 0 || !matchingCustomFolder();
+      saveButton.textContent = selected.type === "note" ? "保存归档" : "重命名文件夹";
+    };
+
+    const filteredNotes = () => {
+      const query = (input.value || "").trim().toLowerCase();
+      return selectedNotes().filter((note) => !query || `${note.title} ${note.subject} ${note.course} ${note.chapter} ${note.summary} ${(note.tags || []).join(" ")}`.toLowerCase().includes(query));
+    };
+
+    const renderCards = () => {
+      const visibleIds = new Set(filteredNotes().map((note) => note.id));
+      const notesById = new Map(enrichedNotes().map((note) => [note.id, note]));
+      cards.forEach((card) => {
+        const note = notesById.get(card.dataset.id);
+        card.hidden = !visibleIds.has(card.dataset.id);
+        const pill = card.querySelector(".pill");
+        if (pill && note?.subject) pill.textContent = note.subject;
+      });
     };
 
     const renderHierarchy = () => {
-      const tree = groupNotes(selectedNotes());
+      const tree = groupNotes(filteredNotes());
       hierarchyBoard.innerHTML = "";
       tree.forEach((courses, subject) => {
         const section = document.createElement("article");
         section.className = "tree-subject";
-        section.innerHTML = `<h2>${subject}</h2>`;
+        const heading = document.createElement("h2");
+        heading.textContent = subject;
+        section.appendChild(heading);
         courses.forEach((chapters, course) => {
           const courseNode = document.createElement("details");
           courseNode.open = true;
-          courseNode.innerHTML = `<summary>${course}</summary>`;
+          const summary = document.createElement("summary");
+          summary.textContent = course;
+          courseNode.appendChild(summary);
           chapters.forEach((items, chapter) => {
             const chapterNode = document.createElement("div");
             chapterNode.className = "tree-chapter";
-            chapterNode.innerHTML = `<h3>${chapter}</h3>`;
+            const title = document.createElement("h3");
+            title.textContent = chapter;
             const list = document.createElement("div");
             list.className = "tree-note-list";
+            if (!items.length) {
+              const empty = document.createElement("span");
+              empty.className = "tree-note tree-note--empty";
+              empty.textContent = "空文件夹";
+              list.appendChild(empty);
+            }
             items.forEach((note) => {
               const link = document.createElement("a");
               link.href = note.href;
@@ -209,7 +346,7 @@ const notes = Object.entries(modules)
               link.textContent = note.title;
               list.appendChild(link);
             });
-            chapterNode.appendChild(list);
+            chapterNode.append(title, list);
             courseNode.appendChild(chapterNode);
           });
           section.appendChild(courseNode);
@@ -218,16 +355,20 @@ const notes = Object.entries(modules)
       });
     };
 
-    const renderCards = () => {
-      const query = (input?.value || "").trim().toLowerCase();
-      const notesById = new Map(enrichedNotes().map((note) => [note.id, note]));
-      cards.forEach((card) => {
-        const note = notesById.get(card.dataset.id);
-        const haystack = `${note?.title || ""} ${note?.subject || ""} ${note?.course || ""} ${note?.chapter || ""} ${note?.summary || ""} ${(note?.tags || []).join(" ")}`.toLowerCase();
-        const pill = card.querySelector(".pill");
-        if (pill && note?.subject) pill.textContent = note.subject;
-        card.hidden = !note || !sameScope(note) || Boolean(query && !haystack.includes(query));
-      });
+    const renderScopeHead = () => {
+      const content = {
+        all: ["▦", "全部知识", "所有知识点", "从学科到课程逐层浏览，或直接搜索一个概念。"],
+        recent: ["◷", "快捷视图", "最近整理", "按更新时间集中查看最近整理和校对的内容。"],
+        review: ["◇", "快捷视图", "待复核", "这里集中显示仍需要对照原笔记确认的内容。"],
+        subject: ["∷", "学科", selected.subject, "继续在左侧展开课程和章节，缩小浏览范围。"],
+        course: ["▰", selected.subject, selected.course, "这门课程下的全部章节与知识点。"],
+        chapter: ["▱", selected.course, selected.chapter, "本章节已拆分整理的知识点。"],
+        note: ["▤", selected.chapter, enrichedNotes().find((note) => note.id === selected.id)?.title || "知识点", "双击左侧条目可直接打开完整内容。"],
+      }[selected.type];
+      [scopeIcon.textContent, scopeKicker.textContent, scopeTitle.textContent, scopeDescription.textContent] = content;
+      const visible = filteredNotes().length;
+      libraryCount.textContent = `${visible} 个知识点`;
+      emptyState.hidden = visible > 0 || (activeView === "tree" && groupNotes(filteredNotes()).size > 0);
     };
 
     const renderAll = () => {
@@ -235,91 +376,126 @@ const notes = Object.entries(modules)
       renderEditor();
       renderCards();
       renderHierarchy();
-      noteGrid.hidden = activeView !== "cards";
-      hierarchyBoard.hidden = activeView !== "tree";
+      renderScopeHead();
+      noteGrid.hidden = activeView !== "cards" || !emptyState.hidden;
+      hierarchyBoard.hidden = activeView !== "tree" || !emptyState.hidden;
+      viewButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.view === activeView));
     };
 
-    const saveOverrides = () => localStorage.setItem(storageKey, JSON.stringify(overrides, null, 2));
-    const updateNotes = (predicate, updater) => {
-      enrichedNotes().filter(predicate).forEach((note) => {
+    const renameSelectedFolder = (nextName) => {
+      const name = nextName.trim();
+      if (!name) return;
+      const old = { ...selected };
+      enrichedNotes().filter((note) => sameScope(note, old)).forEach((note) => {
         const next = { subject: note.subject || "", course: note.course || "", chapter: note.chapter || "" };
-        updater(next, note);
-        overrides[note.id] = next;
+        if (old.type === "subject") next.subject = name;
+        if (old.type === "course") next.course = name;
+        if (old.type === "chapter") next.chapter = name;
+        workspace.overrides[note.id] = next;
       });
-      saveOverrides();
+      workspace.folders.forEach((folder) => {
+        if (old.type === "subject" && folder.subject === old.subject) folder.subject = name;
+        if (old.type === "course" && folder.subject === old.subject && folder.course === old.course) folder.course = name;
+        if (old.type === "chapter" && folder.subject === old.subject && folder.course === old.course && folder.chapter === old.chapter) folder.chapter = name;
+      });
+      if (old.type === "subject") selected.subject = name;
+      if (old.type === "course") selected.course = name;
+      if (old.type === "chapter") selected.chapter = name;
+      saveWorkspace();
+      announce("文件夹已重命名");
       renderAll();
     };
 
     const saveSelected = () => {
-      if (selected.type === "all") return;
-      const subject = subjectInput.value.trim();
-      const course = courseInput.value.trim();
-      const chapter = chapterInput.value.trim();
-      updateNotes((note) => sameScope(note), (next) => {
-        if (selected.type === "note") {
-          next.subject = subject;
-          next.course = course;
-          next.chapter = chapter;
-        } else if (selected.type === "subject") {
-          next.subject = selected.subject;
-          next.course = course || next.course;
-          next.chapter = chapter || next.chapter;
-        } else if (selected.type === "course") {
-          next.subject = selected.subject;
-          next.course = selected.course;
-          next.chapter = chapter || next.chapter;
-        } else if (selected.type === "chapter") {
-          next.subject = selected.subject;
-          next.course = selected.course;
-          next.chapter = selected.chapter;
-        }
-      });
+      if (selected.type === "note") {
+        const note = enrichedNotes().find((item) => item.id === selected.id);
+        if (!note) return;
+        workspace.overrides[note.id] = { subject: subjectInput.value.trim(), course: courseInput.value.trim(), chapter: chapterInput.value.trim() };
+        selected = { type: "note", id: note.id, ...workspace.overrides[note.id] };
+        saveWorkspace();
+        announce("知识点归档已更新");
+        renderAll();
+        return;
+      }
+      const name = selected.type === "subject" ? subjectInput.value : selected.type === "course" ? courseInput.value : chapterInput.value;
+      renameSelectedFolder(name);
     };
 
-    const renameScope = () => {
-      if (selected.type === "all" || selected.type === "note") return;
-      const current = selected.type === "subject" ? selected.subject : selected.type === "course" ? selected.course : selected.chapter;
-      const nextName = window.prompt("新的名称", current);
-      if (!nextName?.trim() || nextName.trim() === current) return;
-      const oldSelected = { ...selected };
-      updateNotes((note) => sameScope(note, oldSelected), (next) => {
-        if (oldSelected.type === "subject") next.subject = nextName.trim();
-        if (oldSelected.type === "course") next.course = nextName.trim();
-        if (oldSelected.type === "chapter") next.chapter = nextName.trim();
-      });
-      if (oldSelected.type === "subject") selected.subject = nextName.trim();
-      if (oldSelected.type === "course") selected.course = nextName.trim();
-      if (oldSelected.type === "chapter") selected.chapter = nextName.trim();
+    const addFolder = () => {
+      let parent = selected;
+      if (["recent", "review"].includes(parent.type)) parent = { type: "all", subject: "", course: "", chapter: "" };
+      if (parent.type === "note") parent = { type: "chapter", subject: parent.subject, course: parent.course, chapter: parent.chapter };
+      if (parent.type === "chapter") return announce("当前目录已到章节层级，可选择知识点并修改其归档");
+      const type = parent.type === "all" ? "subject" : parent.type === "subject" ? "course" : "chapter";
+      const label = type === "subject" ? "学科" : type === "course" ? "课程" : "章节";
+      const name = window.prompt(`新${label}名称`);
+      if (!name?.trim()) return;
+      const folder = {
+        id: uniqueId(), type,
+        subject: type === "subject" ? name.trim() : parent.subject,
+        course: type === "course" ? name.trim() : type === "chapter" ? parent.course : "",
+        chapter: type === "chapter" ? name.trim() : "",
+      };
+      workspace.folders.push(folder);
+      selected = { type, subject: folder.subject, course: folder.course, chapter: folder.chapter, id: "" };
+      expanded.add(folderKey("subject", folder.subject));
+      if (folder.course) expanded.add(folderKey("course", folder.subject, folder.course));
+      saveWorkspace();
+      announce(`已新建${label}`);
       renderAll();
     };
 
-    const downloadJson = (name, payload) => {
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const deleteEmptyFolder = () => {
+      const folder = matchingCustomFolder();
+      if (!folder || selectedNotes().length) return;
+      workspace.folders = workspace.folders.filter((item) => {
+        if (selected.type === "subject") return item.subject !== selected.subject;
+        if (selected.type === "course") return !(item.subject === selected.subject && item.course === selected.course);
+        return item.id !== folder.id;
+      });
+      selected = { type: "all", subject: "", course: "", chapter: "", id: "" };
+      saveWorkspace();
+      announce("空文件夹已删除");
+      renderAll();
+    };
+
+    const downloadJson = () => {
+      const blob = new Blob([JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), ...workspace }, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = name;
+      link.download = `niutou-library-structure-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
+      announce("知识库结构已导出");
     };
 
+    groupNotes().forEach((courses, subject) => {
+      expanded.add(folderKey("subject", subject));
+      courses.forEach((_chapters, course) => expanded.add(folderKey("course", subject, course)));
+    });
+    document.querySelector("#review-count").textContent = String(baseNotes.filter((note) => String(note.status || "").includes("待复核")).length);
     const params = new URLSearchParams(window.location.search);
-    const initial = params.get("q") || "";
-    if (input) input.value = initial;
-    input?.addEventListener("input", renderAll);
-    viewButtons.forEach((button) => button.addEventListener("click", () => {
-      activeView = button.dataset.view;
-      viewButtons.forEach((item) => item.classList.toggle("is-active", item === button));
-      renderAll();
-    }));
+    input.value = params.get("q") || "";
+    input.addEventListener("input", renderAll);
+    quickButtons.forEach((button) => button.addEventListener("click", () => selectScope(button.dataset.quick)));
+    viewButtons.forEach((button) => button.addEventListener("click", () => { activeView = button.dataset.view; renderAll(); }));
+    addFolderButton.addEventListener("click", addFolder);
     saveButton.addEventListener("click", saveSelected);
-    renameButton.addEventListener("click", renameScope);
-    exportButton.addEventListener("click", () => downloadJson("niutou-taxonomy.json", { version: 1, overrides }));
+    deleteButton.addEventListener("click", deleteEmptyFolder);
+    document.querySelector("#close-editor").addEventListener("click", () => { selected = { type: "all", subject: "", course: "", chapter: "", id: "" }; renderAll(); });
+    exportButton.addEventListener("click", downloadJson);
     resetButton.addEventListener("click", () => {
-      overrides = {};
-      selected = { type: "all", subject: "", course: "", chapter: "", id: "" };
+      if (!window.confirm("恢复默认知识库层级？可先导出当前结构作为备份。")) return;
+      workspace = { overrides: {}, folders: [] };
       localStorage.removeItem(storageKey);
+      selected = { type: "all", subject: "", course: "", chapter: "", id: "" };
+      announce("已恢复默认层级");
       renderAll();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "/" && !event.target.matches?.("input, textarea, select")) { event.preventDefault(); input.focus(); }
+      if (event.key === "Escape" && document.activeElement === input) { input.value = ""; input.blur(); renderAll(); }
     });
     renderAll();
   </script>

@@ -12,43 +12,52 @@ const notes = Object.entries(modules)
 ---
 
 <BaseLayout title="知识工作台" description="可整理层级、可生成地图、可全屏编辑的个人知识工作台">
-  <section class="studio-intro">
-    <div>
-      <span class="eyebrow">KNOWLEDGE STUDIO · 3.0</span>
-      <h1>把知识库整理成可以展开的地图</h1>
-      <p>左侧像文件夹一样整理知识点，中间编辑知识地图，右侧处理节点和关系。所有修改都会自动保存在当前浏览器。</p>
+  <section class="studio-page-head">
+    <div class="studio-page-head__copy">
+      <div class="studio-page-head__path"><a href="/library">知识库</a><span>›</span><strong>知识工作台</strong></div>
+      <h1>知识工作台</h1>
+      <p>把目录变成地图，再用关系补充目录无法表达的联系。拖动、连接和层级调整都会自动保存在当前浏览器。</p>
     </div>
-    <div class="studio-metrics" aria-label="知识库统计">
-      <div><strong>{notes.length}</strong><span>原始知识点</span></div>
-      <div><strong id="folder-count">0</strong><span>文件夹</span></div>
-      <div><strong id="relation-count">0</strong><span>关系</span></div>
+    <div class="studio-page-head__aside">
+      <div class="studio-metrics" aria-label="知识库统计">
+        <div><strong>{notes.length}</strong><span>知识点</span></div>
+        <div><strong id="folder-count">0</strong><span>文件夹</span></div>
+        <div><strong id="relation-count">0</strong><span>关系</span></div>
+      </div>
+      <a class="studio-library-link" href="/library"><span>先整理知识库</span><span>→</span></a>
     </div>
   </section>
 
   <section class="studio-app" id="studio-app" aria-label="知识关系图编辑器">
     <header class="studio-appbar">
       <div class="studio-appbar__brand">
-        <span class="studio-live-dot"></span>
-        <strong>牛头的脑袋 · 知识工作台</strong>
-        <span id="save-state">已自动保存</span>
+        <span class="studio-app-icon">⌁</span>
+        <div><strong>关系地图</strong><span><i class="studio-live-dot"></i><span id="save-state">已自动保存</span></span></div>
       </div>
       <div class="studio-appbar__actions">
-        <button class="studio-tool" type="button" id="undo" title="撤销 (Ctrl+Z)" aria-label="撤销">↶</button>
-        <button class="studio-tool" type="button" id="redo" title="重做 (Ctrl+Y)" aria-label="重做">↷</button>
-        <span class="studio-divider"></span>
-        <button class="studio-action" type="button" id="add-node">＋ 节点</button>
-        <button class="studio-action" type="button" id="build-map">层级生成地图</button>
-        <button class="studio-action" type="button" id="auto-layout">自动整理 <kbd>L</kbd></button>
-        <button class="studio-action" type="button" id="fit-view">居中 <kbd>F</kbd></button>
-        <button class="studio-tool" type="button" id="toggle-fullscreen" title="全屏编辑" aria-label="全屏编辑">⛶</button>
-        <button class="studio-tool" type="button" id="show-shortcuts" title="快捷键" aria-label="显示快捷键">?</button>
+        <div class="studio-action-group studio-history-actions">
+          <button class="studio-tool" type="button" id="undo" title="撤销 (Ctrl+Z)" aria-label="撤销">↶</button>
+          <button class="studio-tool" type="button" id="redo" title="重做 (Ctrl+Y)" aria-label="重做">↷</button>
+        </div>
+        <div class="studio-action-group">
+          <button class="studio-action" type="button" id="add-node"><span>＋</span> 新建节点</button>
+          <button class="studio-action studio-action--primary" type="button" id="build-map"><span>⌘</span> 从当前目录生成</button>
+        </div>
+        <div class="studio-action-group studio-layout-actions">
+          <button class="studio-action" type="button" id="auto-layout" title="自动整理 (L)"><span>⌗</span> 自动布局</button>
+          <button class="studio-action" type="button" id="fit-view" title="适应画布 (F)"><span>⊙</span> 适应画布</button>
+        </div>
+        <div class="studio-action-group">
+          <button class="studio-tool" type="button" id="toggle-fullscreen" title="全屏编辑" aria-label="全屏编辑">⛶</button>
+          <button class="studio-tool" type="button" id="show-shortcuts" title="快捷键" aria-label="显示快捷键">?</button>
+        </div>
       </div>
     </header>
 
     <div class="studio-body">
       <aside class="studio-sidebar studio-library-panel">
         <div class="studio-panel-heading">
-          <div><span>知识库</span><small>文件夹式整理</small></div>
+          <div><span>目录与节点</span><small>选择一个目录作为地图起点</small></div>
           <span id="visible-count" class="studio-count"></span>
         </div>
         <div class="studio-search-wrap">
@@ -58,15 +67,16 @@ const notes = Object.entries(modules)
         </div>
         <div id="subject-filters" class="studio-filter-row"></div>
         <div class="folder-toolbar" aria-label="知识库层级工具">
-          <button type="button" id="add-folder" title="在当前层级新建文件夹">＋ 文件夹</button>
-          <button type="button" id="rename-folder" title="重命名当前文件夹">重命名</button>
-          <button type="button" id="delete-folder" title="删除当前文件夹">删除</button>
+          <button type="button" id="add-folder" title="在当前层级新建文件夹"><span>＋</span> 新建</button>
+          <button type="button" id="rename-folder" title="重命名当前文件夹"><span>✎</span> 重命名</button>
+          <button type="button" id="delete-folder" title="删除当前文件夹"><span>⌫</span> 删除</button>
         </div>
         <div id="folder-path" class="folder-path"></div>
         <div id="node-library" class="studio-node-library"></div>
       </aside>
 
       <div class="studio-canvas-shell">
+        <div class="studio-canvas-context"><span class="studio-live-dot"></span><strong>自由画布</strong><span>拖动空白处平移</span></div>
         <div class="studio-canvas-tools" aria-label="画布工具">
           <button class="canvas-mode is-active" type="button" data-mode="select" title="选择和移动 (V)"><span>↖</span>选择</button>
           <button class="canvas-mode" type="button" data-mode="connect" title="连接两个知识点 (C)"><span>⌁</span>连线</button>
@@ -82,10 +92,11 @@ const notes = Object.entries(modules)
       </div>
 
       <aside class="studio-sidebar studio-inspector">
+        <div class="studio-inspector-label"><span>属性面板</span><small>NODE INSPECTOR</small></div>
         <div id="inspector-empty" class="inspector-empty">
-          <span class="inspector-empty__icon">◎</span>
-          <h2>选择节点或文件夹</h2>
-          <p>可编辑归档位置、建立关系，或把文件夹层级部署成知识地图。</p>
+          <span class="inspector-empty__icon">⌁</span>
+          <h2>选择一个节点</h2>
+          <p>选中节点后，可在这里编辑内容、调整归档并建立知识关系。</p>
           <div class="inspector-tips">
             <span><kbd>V</kbd> 选择</span>
             <span><kbd>C</kbd> 连线</span>
@@ -794,8 +805,8 @@ const notes = Object.entries(modules)
       if (!graphNodes.length) return;
       const rect = svg.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
-      const paddingX = 220;
-      const paddingY = 170;
+      const paddingX = 72;
+      const paddingY = 72;
       const minX = Math.min(...graphNodes.map((node) => node.x - NODE_W / 2)) - paddingX;
       const maxX = Math.max(...graphNodes.map((node) => node.x + NODE_W / 2)) + paddingX;
       const minY = Math.min(...graphNodes.map((node) => node.y - NODE_H / 2)) - paddingY;
